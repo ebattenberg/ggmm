@@ -237,10 +237,10 @@ class GMM(object):
 
     Attributes
     ----------
-    `weights_` : array, shape (`n_components`,)
+    `weights` : array, shape (`n_components`,)
         This attribute stores the mixing weights for each mixture component.
 
-    `means_` : array, shape (`n_components`, `n_features`)
+    `means` : array, shape (`n_components`, `n_features`)
         Mean parameters for each mixture component.
 
     `covars_` : array
@@ -276,9 +276,9 @@ class GMM(object):
             raise ValueError('Invalid value for covariance_type: %s' %
                              covariance_type)
 
-        self.weights_ = None
-        self.means_ = None
-        self.covars_ = None
+        self.weights = None
+        self.means = None
+        self.covars = None
 
     def set_weights(self,weights):
         if weights.shape != (self.n_components,):
@@ -288,25 +288,34 @@ class GMM(object):
             raise ValueError, 'input weight vector must sum to 1.0'
         if np.any(weights < 0.0):
             raise ValueError, 'input weight values must be non-negative'
-        self.weights_ = weights.copy()
+        self.weights = weights.copy()
 
     def set_means(self,means):
         if means.shape != (self.n_components,self.n_dimensions):
             raise ValueError, 'input mean matrix is of shape %s, should be %s' % (
                     means.shape,(self.n_components,self.n_dimensions))
-        self.means_ = means.copy()
+        self.means = means.copy()
 
     def set_covars(self,covars):
         if covars.shape != (self.n_components,self.n_dimensions):
             raise ValueError, 'input covars matrix is of shape %s, should be %s' % (
                     covars.shape,(self.n_components,self.n_dimensions))
-        self.covars_ = covars.copy()
-        if np.any(self.covars_ < 0):
+        self.covars = covars.copy()
+        if np.any(self.covars < 0):
             raise ValueError, 'input covars must be non-negative'
-        if np.any(self.covars_ < self.min_covar):
-            self.covars_[self.covars_ < self.min_covar] = self.min_covar
+        if np.any(self.covars < self.min_covar):
+            self.covars[self.covars < self.min_covar] = self.min_covar
             if self.verbose:
                 print 'input covars less than min_covar (%g) have been set to %g' % (self.min_covar,self.min_covar)
+
+    def get_weights(self):
+        return self.weights
+
+    def get_means(self):
+        return self.means
+
+    def get_covars(self):
+        return self.covars
 
     def score_samples(self, X):
         """Return the per-sample likelihood of the data under the model.
@@ -337,9 +346,9 @@ class GMM(object):
         X = np.asarray(X, dtype=np.float)
         n_observations = X.shape[0]
 
-        lpr = (log_multivariate_normal_density(X, self.means_, self.covars_,
+        lpr = (log_multivariate_normal_density(X, self.means, self.covars,
                                                self.covariance_type)
-               + np.log(self.weights_))
+               + np.log(self.weights))
         logprob = logsumexp(lpr, axis=1)
         responsibilities = np.exp(lpr - logprob[:, np.newaxis])
         return logprob, responsibilities
@@ -408,9 +417,9 @@ class GMM(object):
         if random_state is None:
             random_state = self.random_state
         random_state = check_random_state(random_state)
-        weight_cdf = np.cumsum(self.weights_)
+        weight_cdf = np.cumsum(self.weights)
 
-        X = np.empty((n_samples, self.means_.shape[1]))
+        X = np.empty((n_samples, self.means.shape[1]))
         rand = random_state.rand(n_samples)
         # decide which component to use for each sample
         comps = weight_cdf.searchsorted(rand)
@@ -422,13 +431,13 @@ class GMM(object):
             num_comp_in_X = comp_in_X.sum()
             if num_comp_in_X > 0:
                 if self.covariance_type == 'tied':
-                    cv = self.covars_
+                    cv = self.covars
                 elif self.covariance_type == 'spherical':
-                    cv = self.covars_[comp][0]
+                    cv = self.covars[comp][0]
                 else:
-                    cv = self.covars_[comp]
+                    cv = self.covars[comp]
                 X[comp_in_X] = sample_gaussian(
-                    self.means_[comp], cv, self.covariance_type,
+                    self.means[comp], cv, self.covariance_type,
                     num_comp_in_X, random_state=random_state).T
         return X
 
@@ -476,17 +485,17 @@ class GMM(object):
         max_log_prob = -np.infty
 
         for _ in xrange(n_init):
-            if 'm' in init_params or self.means_ is None:
+            if 'm' in init_params or self.means is None:
                 perm = random_state.permutation(n_observations)
-                self.means_ = X[perm[:self.n_components]].copy()
+                self.means = X[perm[:self.n_components]].copy()
 
-            if 'w' in init_params or self.weights_ is None:
-                self.weights_ = (1.0/self.n_components)*np.ones(self.n_components)
+            if 'w' in init_params or self.weights is None:
+                self.weights = (1.0/self.n_components)*np.ones(self.n_components)
 
-            if 'c' in init_params or self.covars_ is None:
+            if 'c' in init_params or self.covars is None:
                 if self.covariance_type == 'diag':
                     cv = np.var(X,axis=0) + self.min_covar
-                    self.covars_ = np.tile(cv, (self.n_components,1))
+                    self.covars = np.tile(cv, (self.n_components,1))
                 else:
                     raise ValueError, 'unsupported covariance type: %s' % self.covariance_type
 
@@ -515,9 +524,9 @@ class GMM(object):
             if n_iter:
                 if log_likelihood[-1] > max_log_prob:
                     max_log_prob = log_likelihood[-1]
-                    best_params = {'weights': self.weights_,
-                                   'means': self.means_,
-                                   'covars': self.covars_}
+                    best_params = {'weights': self.weights,
+                                   'means': self.means,
+                                   'covars': self.covars}
         # check the existence of an init param that was not subject to
         # likelihood computation issue.
         if np.isneginf(max_log_prob) and n_iter:
@@ -527,9 +536,9 @@ class GMM(object):
                 "(or increasing n_init) or check for degenerate data.")
         # n_iter == 0 occurs when using GMM within HMM
         if n_iter:
-            self.covars_ = best_params['covars']
-            self.means_ = best_params['means']
-            self.weights_ = best_params['weights']
+            self.covars = best_params['covars']
+            self.means = best_params['means']
+            self.weights = best_params['weights']
 
         return converged
 
@@ -541,19 +550,19 @@ class GMM(object):
         inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
 
         if 'w' in update_params:
-            self.weights_ = (weights / (weights.sum() + 10 * EPS) + EPS)
+            self.weights = (weights / (weights.sum() + 10 * EPS) + EPS)
         if 'm' in update_params:
-            self.means_ = weighted_X_sum * inverse_weights
+            self.means = weighted_X_sum * inverse_weights
         if 'c' in update_params:
             covar_mstep_func = _covar_mstep_funcs[self.covariance_type]
-            self.covars_ = covar_mstep_func(
+            self.covars = covar_mstep_func(
                 self, X, responsibilities, weighted_X_sum, inverse_weights,
                 min_covar)
         return weights
 
     def _n_parameters(self):
         """Return the number of free parameters in the model."""
-        ndim = self.means_.shape[1]
+        ndim = self.means.shape[1]
         if self.covariance_type == 'full':
             cov_params = self.n_components * ndim * (ndim + 1) / 2.
         elif self.covariance_type == 'diag':
@@ -607,6 +616,7 @@ def _log_multivariate_normal_density_diag(X, means, covars):
                   + np.sum((means ** 2) / covars, 1)
                   - 2 * np.dot(X, (means / covars).T)
                   + np.dot(X ** 2, (1.0 / covars).T))
+    raise ValueError
     return lpr
 
 
@@ -715,8 +725,8 @@ def _covar_mstep_diag(gmm, X, responsibilities, weighted_X_sum, norm,
                       min_covar):
     """Performing the covariance M step for diagonal cases"""
     avg_X2 = np.dot(responsibilities.T, X * X) * norm
-    avg_means2 = gmm.means_ ** 2
-    avg_X_means = gmm.means_ * weighted_X_sum * norm
+    avg_means2 = gmm.means ** 2
+    avg_X_means = gmm.means * weighted_X_sum * norm
     return avg_X2 - 2 * avg_X_means + avg_means2 + min_covar
 
 
@@ -738,7 +748,7 @@ def _covar_mstep_full(gmm, X, responsibilities, weighted_X_sum, norm,
         # Underflow Errors in doing post * X.T are  not important
         np.seterr(under='ignore')
         avg_cv = np.dot(post * X.T, X) / (post.sum() + 10 * EPS)
-        mu = gmm.means_[c][np.newaxis]
+        mu = gmm.means[c][np.newaxis]
         cv[c] = (avg_cv - np.dot(mu.T, mu) + min_covar * np.eye(n_features))
     return cv
 
@@ -748,7 +758,7 @@ def _covar_mstep_tied(gmm, X, responsibilities, weighted_X_sum, norm,
     # Eq. 15 from K. Murphy, "Fitting a Conditional Linear Gaussian
     n_features = X.shape[1]
     avg_X2 = np.dot(X.T, X)
-    avg_means2 = np.dot(gmm.means_.T, weighted_X_sum)
+    avg_means2 = np.dot(gmm.means.T, weighted_X_sum)
     return (avg_X2 - avg_means2 + min_covar * np.eye(n_features)) / X.shape[0]
 
 
