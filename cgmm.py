@@ -339,6 +339,9 @@ class GMM(object):
             Posterior probabilities of each mixture component for each
             observation
         """
+        if None in (self.weights,self.means,self.covars):
+            raise ValueError, 'GMM parameters have not been initialized'
+
         if X.shape[1] != self.n_dimensions:
             raise ValueError, 'input data matrix X is of shape %s, should be %s' % (
                     X.shape,(X.shape[0],self.n_dimensions))
@@ -616,7 +619,6 @@ def _log_multivariate_normal_density_diag(X, means, covars):
                   + np.sum((means ** 2) / covars, 1)
                   - 2 * np.dot(X, (means / covars).T)
                   + np.dot(X ** 2, (1.0 / covars).T))
-    raise ValueError
     return lpr
 
 

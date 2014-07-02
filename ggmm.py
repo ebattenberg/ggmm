@@ -8,15 +8,26 @@ of Gaussian Mixture Models.
 # Author: Eric Battenberg <ebattenberg@gmail.com>
 # Based on gmm.py from sklearn
 
+import cudamat as cm
+import logging
 import numbers
 import numpy as np
-import cudamat as cm
+import sys
+
 from scipy import linalg
 
 EPS = np.finfo(float).eps
+MAX_ONES = 1024*256
 
+logger = logging.getLogger(__name__)
 
-def log_multivariate_normal_density(X, means, covars, covariance_type='diag',temp_gpu_mem):
+def init(max_ones=MAX_ONES):
+    cm.init(max_ones)
+
+def shutdown():
+    cm.shutdown()
+
+def log_multivariate_normal_density(X, means, covars, covariance_type='diag',temp_gpu_mem={}):
     """Compute the log probability under a multivariate Gaussian distribution.
 
     Parameters
@@ -24,47 +35,35 @@ def log_multivariate_normal_density(X, means, covars, covariance_type='diag',tem
     X : array_like, shape (n_samples, n_features)
         List of n_features-dimensional data points.  Each row corresponds to a
         single data point.
-    means : array_like, shape (n_components, n_features)
-        List of n_features-dimensional mean vectors for n_components Gaussians.
+    means : array_like, shape (K, n_features)
+        List of n_features-dimensional mean vectors for K Gaussians.
         Each row corresponds to a single mean vector.
     covars : array_like
-        List of n_components covariance parameters for each Gaussian. The shape
+        List of K covariance parameters for each Gaussian. The shape
         depends on `covariance_type`:
-            (n_components, n_features)      if 'spherical',
+            (K, n_features)      if 'spherical',
             (n_features, n_features)    if 'tied',
-            (n_components, n_features)    if 'diag',
-            (n_components, n_features, n_features) if 'full'
+            (K, n_features)    if 'diag',
+            (K, n_features, n_features) if 'full'
     covariance_type : string
         Type of the covariance parameters.  Must be one of
         'spherical', 'tied', 'diag', 'full'.  Defaults to 'diag'.
 
     Returns
     -------
-    lpr : array_like, shape (n_samples, n_components)
+    lpr : array_like, shape (n_samples, K)
         Array containing the log probabilities of each data point in
-        X under each of the n_components multivariate Gaussian distributions.
+        X under each of the K multivariate Gaussian distributions.
     """
     log_multivariate_normal_density_dict = {
         #'spherical': _log_multivariate_normal_density_spherical,
         #'tied': _log_multivariate_normal_density_tied,
         'diag': _log_multivariate_normal_density_diag,
-        #'full': _log_multivariate_normal_density_full}
+        #'full': _log_multivariate_normal_density_full
+        }
     return log_multivariate_normal_density_dict[covariance_type](
         X, means, covars,temp_gpu_mem)
 
-def logsumexp(arr, axis=0):
-    """Computes the sum of arr assuming arr is in the log domain.
-
-    Returns log(sum(exp(arr))) while minimizing the possibility of
-    over/underflow.
-    """
-    arr = np.rollaxis(arr, axis)
-    # Use the max to normalize, as with the log this is what accumulates
-    # the less errors
-    vmax = arr.max(axis=0)
-    out = np.log(np.sum(np.exp(arr - vmax), axis=0))
-    out += vmax
-    return out
 
 def check_random_state(seed):
     """Turn seed into a np.random.RandomState instance
@@ -141,7 +140,7 @@ def pinvh(a, cond=None, rcond=None, lower=True):
 
     return np.dot(u * psigma_diag, np.conjugate(u).T)
 
-def convert_to_CUDAMatrix(input_array):
+def return_CUDAMatrix(input_array):
     '''
     If input is a numpy_array, convert to CUDAMatrix.
     If input is already CUDAMatrix, return input
@@ -156,7 +155,36 @@ def convert_to_CUDAMatrix(input_array):
     else:
         raise ValueError, 'cannot handle input of type: %s' % (type(input_array),)
 
+def maintain_temp_gpu_mem(temp_gpu_mem, N, K, D):
+    '''
+    make sure temporary gpu memory is of correct size
+    '''
+    key_shape_mapping = {
+            'NxK' :         (N,K),
+            'NxK(2)' :      (N,K),
+            'KxD' :         (K,D),
+            'KxD(2)' :      (K,D),
+            'Kx1' :         (K,1),
+            'Nx1' :         (N,1),
+            'Nx1(2)' :      (N,1),
+            'NxD' :         (N,D),
+    }
+    for key,shape in key_shape_mapping.iteritems():
+        if not temp_gpu_mem.has_key(key):
+            logger.debug('%s: created %s at key %s' % (
+                sys._getframe().f_code.co_name,
+                shape,
+                key))
+            temp_gpu_mem[key] = cm.empty(shape)
+        elif temp_gpu_mem[key].shape != shape:
+            logger.debug('%s: reshaped %s to %s at key %s' % (
+                sys._getframe().f_code.co_name, 
+                temp_gpu_mem[key].shape,
+                shape,
+                key))
+            temp_gpu_mem[key] = cm.empty(shape)
 
+    return temp_gpu_mem
 
 
 def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
@@ -219,7 +247,7 @@ class GMM(object):
 
     Parameters
     ----------
-    n_components : int, optional
+    K : int, optional
         Number of mixture components. Defaults to 1.
 
     covariance_type : string, optional
@@ -255,20 +283,20 @@ class GMM(object):
 
     Attributes
     ----------
-    `weights_` : array, shape (`n_components`,)
+    `weights_` : array, shape (`K`,)
         This attribute stores the mixing weights for each mixture component.
 
-    `means_` : array, shape (`n_components`, `n_features`)
+    `means_` : array, shape (`K`, `n_features`)
         Mean parameters for each mixture component.
 
     `covars_` : array
         Covariance parameters for each mixture component.  The shape
         depends on `covariance_type`::
 
-            (n_components, n_features)             if 'spherical',
+            (K, n_features)             if 'spherical',
             (n_features, n_features)               if 'tied',
-            (n_components, n_features)             if 'diag',
-            (n_components, n_features, n_features) if 'full'
+            (K, n_features)             if 'diag',
+            (K, n_features, n_features) if 'full'
 
     Output: returns bool converged
 
@@ -278,14 +306,14 @@ class GMM(object):
 
     """
 
-    def __init__(self, n_components, n_dimensions,
+    def __init__(self, K, D,
                 covariance_type='diag',
                 min_covar=1e-3,
                 verbose=False):
                
 
-        self.n_components = n_components
-        self.n_dimensions = n_dimensions
+        self.K = K
+        self.D = D
         self.covariance_type = covariance_type
         self.min_covar = min_covar
         self.verbose = verbose
@@ -298,34 +326,28 @@ class GMM(object):
         self.means = None
         self.covars = None
 
-        self.temp_gpu_space = {}
-        self._allocate_temp_gpu_mem()
-
-    def _allocate_temp_gpu_mem(self):
-
-        self.temp_gpu_mem['NxK'] = None # don't know what N is yet
-
+        self.temp_gpu_mem = {}
 
     def set_weights(self,weights):
-        if weights.shape != (self.n_components,):
+        if weights.shape != (self.K,):
             raise ValueError, 'input weight vector is of shape %s, should be %s' % (
-                    weights.shape,(self.n_components,))
+                    weights.shape,(self.K,))
         if np.abs(weights.sum()-1.0) > 1e-6:
             raise ValueError, 'input weight vector must sum to 1.0'
         if np.any(weights < 0.0):
             raise ValueError, 'input weight values must be non-negative'
-        self.weights = convert_to_CUDAMatrix(weights)
+        self.weights = return_CUDAMatrix(weights)
 
     def set_means(self,means):
-        if means.shape != (self.n_components,self.n_dimensions):
+        if means.shape != (self.K,self.D):
             raise ValueError, 'input mean matrix is of shape %s, should be %s' % (
-                    means.shape,(self.n_components,self.n_dimensions))
-        self.means = convert_to_CUDAMatrix(means)
+                    means.shape,(self.K,self.D))
+        self.means = return_CUDAMatrix(means)
 
     def set_covars(self,covars):
-        if covars.shape != (self.n_components,self.n_dimensions):
+        if covars.shape != (self.K,self.D):
             raise ValueError, 'input covars matrix is of shape %s, should be %s' % (
-                    covars.shape,(self.n_components,self.n_dimensions))
+                    covars.shape,(self.K,self.D))
         covars_ = covars.copy()
         if np.any(covars_ < 0):
             raise ValueError, 'input covars must be non-negative'
@@ -334,7 +356,7 @@ class GMM(object):
             if self.verbose:
                 print 'input covars less than min_covar (%g) have been set to %g' % (self.min_covar,self.min_covar)
 
-        self.covars = convert_to_CUDAMatrix(covars_)
+        self.covars = return_CUDAMatrix(covars_)
 
     def get_weights(self):
         return self.weights.asarray()
@@ -363,24 +385,65 @@ class GMM(object):
         logprob : array_like, shape (n_samples,)
             Log probabilities of each data point in X.
 
-        responsibilities : array_like, shape (n_samples, n_components)
+        responsibilities : array_like, shape (n_samples, K)
             Posterior probabilities of each mixture component for each
             observation
         """
-        if X.shape[1] != self.n_dimensions:
+        if None in (self.weights,self.means,self.covars):
+            raise ValueError, 'GMM parameters have not been initialized'
+
+        if X.shape[1] != self.D:
             raise ValueError, 'input data matrix X is of shape %s, should be %s' % (
-                    X.shape,(X.shape[0],self.n_dimensions))
+                    X.shape,(X.shape[0],self.D))
 
-        n_observations = X.shape[0]
+        N = X.shape[0]
+        Xgpu = return_CUDAMatrix(X)
 
-        Xgpu = convert_to_CUDAMatrix(X)
+        maintain_temp_gpu_mem(self.temp_gpu_mem, N, self.K, self.D)
 
-        lpr = (log_multivariate_normal_density(Xgpu, self.means, self.covars,
-                                               self.covariance_type,self.temp_gpu_mem)
-               + np.log(self.weights))
-        logprob = logsumexp(lpr, axis=1)
-        responsibilities = np.exp(lpr - logprob[:, np.newaxis])
-        return logprob, responsibilities
+        # lpr = log_multivariate_normal_density() + np.log(self.weights)[None,:]
+        # -----------------------------------------------------
+        # lpr is using temp_gpu_mem['NxK']
+        lpr = log_multivariate_normal_density(
+                Xgpu, self.means, self.covars, 
+                self.covariance_type,self.temp_gpu_mem)
+        # lpr += np.log(self.weights)
+        temp_Kx1 = self.temp_gpu_mem['Kx1']
+        cm.log(self.weights, target=temp_Kx1)
+        lpr.add_row_vec(temp_Kx1.reshape((1,self.K)))
+        temp_Kx1.reshape((self.K,1))
+        # in use: lpr -> 'NxK'
+
+
+        #logprob = np.log(np.sum(np.exp(lpr - vmax), axis=1))
+        #logprob += vmax
+        # ---------------------------------------------------------
+        vmax = self.temp_gpu_mem['Nx1']
+        logprob = self.temp_gpu_mem['Nx1(2)']
+        # vmax = np.max(lpr,axis=1)
+        lpr.max(axis=1, target=vmax)
+        temp_NxK = self.temp_gpu_mem['NxK(2)']
+        # temp_NxK = lpr - vmax[:,None]
+        lpr.add_col_mult(vmax, -1.0, target=temp_NxK)
+        # temp_NxK = np.exp(temp_NxK)
+        cm.exp(temp_NxK,target=temp_NxK)
+        # logprob = np.sum(temp_NxK, axis=1)
+        temp_NxK.sum(axis=1, target=logprob)
+        # logprob = np.log(logprob)
+        cm.log(logprob, target=logprob)
+        # logprob += vmax
+        logprob.add(vmax)
+        # in use: logprob -> 'Nx1(2)'
+
+
+        # responsibilities = np.exp(lpr - logprob[:, np.newaxis])
+        # ---------------------------------------------------------
+        # lpr = lpr - logprob[:,None]
+        lpr.add_col_mult(logprob, mult=-1.0)
+        cm.exp(lpr, target=lpr)
+        posteriors = lpr
+
+        return logprob, posteriors
 
     def score(self, X):
         """Compute the log probability under the model.
@@ -423,7 +486,7 @@ class GMM(object):
 
         Returns
         -------
-        responsibilities : array-like, shape = (n_samples, n_components)
+        responsibilities : array-like, shape = (n_samples, K)
             Returns the probability of the sample for each Gaussian
             (state) in the model.
         """
@@ -453,7 +516,7 @@ class GMM(object):
         # decide which component to use for each sample
         comps = weight_cdf.searchsorted(rand)
         # for each component, generate all needed samples
-        for comp in xrange(self.n_components):
+        for comp in xrange(self.K):
             # occurrences of current component in X
             comp_in_X = (comp == comps)
             # number of those occurrences
@@ -499,37 +562,37 @@ class GMM(object):
 
         if n_init < 1:
             raise ValueError('GMM estimation requires at least one run')
-        if X.shape[1] != self.n_dimensions:
+        if X.shape[1] != self.D:
             raise ValueError, 'input data matrix X is of shape %s, should be %s' % (
-                    X.shape,(X.shape[0],self.n_dimensions))
+                    X.shape,(X.shape[0],self.D))
 
         X = np.asarray(X, dtype=np.float32)
-        n_observations = X.shape[0]
+        N = X.shape[0]
 
-        if X.shape[0] < self.n_components:
+        if X.shape[0] < self.K:
             raise ValueError(
                 'GMM estimation with %s components, but got only %s samples' %
-                (self.n_components, X.shape[0]))
+                (self.K, X.shape[0]))
 
 
 
         # copy observations to GPU
-        Xgpu = convert_to_CUDAMatrix(X)
+        Xgpu = return_CUDAMatrix(X)
 
         max_log_prob = -np.infty
 
         for _ in xrange(n_init):
             if 'm' in init_params or self.means is None:
-                perm = random_state.permutation(n_observations)
-                self.means = convert_to_CUDAMatrix(X[perm[:self.n_components]])
+                perm = random_state.permutation(N)
+                self.means = return_CUDAMatrix(X[perm[:self.K]])
 
             if 'w' in init_params or self.weights is None:
-                self.weights = convert_to_CUDAMatrix((1.0/self.n_components)*np.ones(self.n_components))
+                self.weights = return_CUDAMatrix((1.0/self.K)*np.ones(self.K))
 
             if 'c' in init_params or self.covars is None:
                 if self.covariance_type == 'diag':
                     cv = np.var(X,axis=0) + self.min_covar
-                    self.covars = convert_to_CUDAMatrix(np.tile(cv, (self.n_components,1)))
+                    self.covars = return_CUDAMatrix(np.tile(cv, (self.K,1)))
                 else:
                     raise ValueError, 'unsupported covariance type: %s' % self.covariance_type
 
@@ -598,15 +661,15 @@ class GMM(object):
         """Return the number of free parameters in the model."""
         ndim = self.means.shape[1]
         if self.covariance_type == 'full':
-            cov_params = self.n_components * ndim * (ndim + 1) / 2.
+            cov_params = self.K * ndim * (ndim + 1) / 2.
         elif self.covariance_type == 'diag':
-            cov_params = self.n_components * ndim
+            cov_params = self.K * ndim
         elif self.covariance_type == 'tied':
             cov_params = ndim * (ndim + 1) / 2.
         elif self.covariance_type == 'spherical':
-            cov_params = self.n_components
-        mean_params = ndim * self.n_components
-        return int(cov_params + mean_params + self.n_components - 1)
+            cov_params = self.K
+        mean_params = ndim * self.K
+        return int(cov_params + mean_params + self.K - 1)
 
     def bic(self, X):
         """Bayesian information criterion for the current model fit
@@ -614,7 +677,7 @@ class GMM(object):
 
         Parameters
         ----------
-        X : array of shape(n_samples, n_dimensions)
+        X : array of shape(n_samples, D)
 
         Returns
         -------
@@ -629,7 +692,7 @@ class GMM(object):
 
         Parameters
         ----------
-        X : array of shape(n_samples, n_dimensions)
+        X : array of shape(n_samples, D)
 
         Returns
         -------
@@ -645,11 +708,15 @@ class GMM(object):
 
 def _log_multivariate_normal_density_diag(X, means, covars, temp_gpu_mem):
     """Compute Gaussian log-density at X for a diagonal model"""
-    n_samples, n_dim = X.shape
+
+    N, D = X.shape
+    K = means.shape[0]
+
+    maintain_temp_gpu_mem(temp_gpu_mem,N,K,D)
 
     lpr_NxK = temp_gpu_mem['NxK']
     temp_KxD = temp_gpu_mem['KxD']
-    inv_covars = temp_gpu_mem['inv_covars']
+    inv_covars = temp_gpu_mem['KxD(2)']
     temp_Kx1 = temp_gpu_mem['Kx1']
     temp_NxD = temp_gpu_mem['NxD']
 
@@ -657,8 +724,8 @@ def _log_multivariate_normal_density_diag(X, means, covars, temp_gpu_mem):
     inv_covars.assign(1.0)
     inv_covars.divide(covars)
 
-    # lpr = n_dim * np.log(2*np.pi)
-    lpr_NxK.assign(n_dim * np.log(2*np.pi))
+    # lpr = D * np.log(2*np.pi)
+    lpr_NxK.assign(D * np.log(2*np.pi))
 
     # temp_Kx1 =  np.sum(np.log(covars), 1)
     cm.log(covars,target=temp_KxD)
@@ -670,38 +737,39 @@ def _log_multivariate_normal_density_diag(X, means, covars, temp_gpu_mem):
     temp_Kx1.add_sums(temp_KxD,axis=1)
 
     # lpr += temp_Kx1
-    lpr.add_col_vec(temp_Kx1)
+    lpr_NxK.add_row_vec(temp_Kx1.reshape((1,K)))
+    temp_Kx1.reshape((K,1)) # return to original shape
 
     # lpr += -2*np.dot(X, (means / covars).T)
     temp_KxD.assign(means)
     temp_KxD.mult(inv_covars)
-    lpr.add_dot(X,temp_KxD.T, mult=-2.)
+    lpr_NxK.add_dot(X,temp_KxD.T, mult=-2.)
 
     # lpr += np.dot(X**2, (1.0 / covars).T)
     temp_NxD.assign(X)
     temp_NxD.mult(temp_NxD)
-    lpr.add_dot(temp_NxD, inv_covars.T)
+    lpr_NxK.add_dot(temp_NxD, inv_covars.T)
 
     # lpr *= -0.5
-    lpr.mult(-0.5)
+    lpr_NxK.mult(-0.5)
 
 
     '''
-    lpr = -0.5 * (n_dim * np.log(2 * np.pi) + np.sum(np.log(covars), 1)
+    lpr = -0.5 * (D * np.log(2 * np.pi) + np.sum(np.log(covars), 1)
                   + np.sum((means ** 2) / covars, 1)
                   - 2 * np.dot(X, (means / covars).T)
                   + np.dot(X ** 2, (1.0 / covars).T))
     '''
 
-    return lpr
+    return lpr_NxK
 
-def _validate_covars(covars, covariance_type, n_components):
+def _validate_covars(covars, covariance_type, K):
     """Do basic checks on matrix covariance sizes and values
     """
     from scipy import linalg
     if covariance_type == 'spherical':
-        if len(covars) != n_components:
-            raise ValueError("'spherical' covars have length n_components")
+        if len(covars) != K:
+            raise ValueError("'spherical' covars have length K")
         elif np.any(covars <= 0):
             raise ValueError("'spherical' covars must be non-negative")
     elif covariance_type == 'tied':
@@ -714,16 +782,16 @@ def _validate_covars(covars, covariance_type, n_components):
     elif covariance_type == 'diag':
         if len(covars.shape) != 2:
             raise ValueError("'diag' covars must have shape "
-                             "(n_components, n_dim)")
+                             "(K, n_dim)")
         elif np.any(covars <= 0):
             raise ValueError("'diag' covars must be non-negative")
     elif covariance_type == 'full':
         if len(covars.shape) != 3:
             raise ValueError("'full' covars must have shape "
-                             "(n_components, n_dim, n_dim)")
+                             "(K, n_dim, n_dim)")
         elif covars.shape[1] != covars.shape[2]:
             raise ValueError("'full' covars must have shape "
-                             "(n_components, n_dim, n_dim)")
+                             "(K, n_dim, n_dim)")
         for n, cv in enumerate(covars):
             if (not np.allclose(cv, cv.T)
                     or np.any(linalg.eigvalsh(cv) <= 0)):
@@ -755,8 +823,8 @@ def _covar_mstep_full(gmm, X, responsibilities, weighted_X_sum, norm,
     # Eq. 12 from K. Murphy, "Fitting a Conditional Linear Gaussian
     # Distribution"
     n_features = X.shape[1]
-    cv = np.empty((gmm.n_components, n_features, n_features))
-    for c in xrange(gmm.n_components):
+    cv = np.empty((gmm.K, n_features, n_features))
+    for c in xrange(gmm.K):
         post = responsibilities[:, c]
         # Underflow Errors in doing post * X.T are  not important
         np.seterr(under='ignore')

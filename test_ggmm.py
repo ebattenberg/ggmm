@@ -1,7 +1,81 @@
+import logging
+import os
 from nose.tools import *
 import numpy as np
 
 import ggmm
+import cgmm # for comparison tests
+
+EPS = 1e-6
+
+# ----------------------------------------------------------------------
+# logging
+# ----------------------------------------------------------------------
+script_name = os.path.basename(__file__)
+log_file = script_name.replace('.py','.log')
+log_format = '%(asctime)s %(levelname)s (%(name)s) %(message)s'
+logging.basicConfig(filename=log_file,level=logging.DEBUG,format=log_format)
+logger = logging.getLogger(os.path.basename(__file__))
+
+def setup():
+    ggmm.init() # activates cublas
+
+def teardown():
+    ggmm.shutdown() # deactivates cublas
+
+
+# ------------------------------------------
+# _log_multivariate_normal_density_diag
+# ------------------------------------------
+def test_log_multivariate_normal_density_diag():
+    N,K,D = 100,8,4 # num_obs, num_components, num_dimensions
+    random_state = np.random.RandomState(123)
+    means = random_state.randn(K,D)
+    covars = random_state.rand(K,D)
+    X = random_state.randn(N,D)
+    means_gpu = ggmm.return_CUDAMatrix(means)
+    covars_gpu = ggmm.return_CUDAMatrix(covars)
+    X_gpu = ggmm.return_CUDAMatrix(X)
+    temp_gpu_mem = ggmm.maintain_temp_gpu_mem({},N,K,D)
+
+
+    lpr_cpu = cgmm._log_multivariate_normal_density_diag(X,means,covars)
+    lpr_gpu = ggmm._log_multivariate_normal_density_diag(X_gpu,means_gpu,covars_gpu,temp_gpu_mem)
+
+    max_dev = np.max(np.abs((lpr_gpu.asarray() - lpr_cpu)/(lpr_cpu+EPS)))
+    assert_less(max_dev,1e-5)
+
+# ------------------------------------------
+# GMM.score_samples
+# ------------------------------------------
+def test_score_samples():
+    N,K,D = 100,8,4 # num_obs, num_components, num_dimensions
+    random_state = np.random.RandomState(123)
+    weights = random_state.rand(K)
+    weights /= weights.sum()
+    means = random_state.randn(K,D)
+    covars = random_state.rand(K,D)
+    X = random_state.randn(N,D)
+
+    gmm_cpu = cgmm.GMM(K,D)
+    gmm_cpu.set_weights(weights)
+    gmm_cpu.set_means(means)
+    gmm_cpu.set_covars(covars)
+
+    gmm_gpu = ggmm.GMM(K,D)
+    gmm_gpu.set_weights(weights)
+    gmm_gpu.set_means(means)
+    gmm_gpu.set_covars(covars)
+
+    logprob_cpu, posterior_cpu = gmm_cpu.score_samples(X)
+    logprob_gpu, posterior_gpu = gmm_gpu.score_samples(X)
+
+    max_logprob_dev = np.max(np.abs((logprob_gpu.asarray().flatten() - logprob_cpu)/(logprob_cpu+EPS)))
+    max_posterior_dev = np.max(np.abs((posterior_gpu.asarray() - posterior_cpu)/(posterior_cpu+EPS)))
+
+    assert_less(max_logprob_dev, 1e-5)
+    assert_less(max_posterior_dev, 1e-4)
+
 
 # ------------------------------------------
 # covariance types
