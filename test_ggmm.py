@@ -23,98 +23,6 @@ def setup():
 def teardown():
     ggmm.shutdown() # deactivates cublas
 
-# ------------------------------------------
-# TempGPUMem
-# ------------------------------------------
-
-def test_get_mem():
-    temp_gpu_mem = ggmm.TempGPUMem()
-    temp1 = temp_gpu_mem.get_mem((5,10),'temp1')
-    assert_equals(temp1.shape, (5,10))
-
-def test_get_mem_again():
-    temp_gpu_mem = ggmm.TempGPUMem()
-    temp1 = temp_gpu_mem.get_mem((5,10), 'temp1')
-    temp2 = temp_gpu_mem.get_mem((5,10),'temp1')
-    assert_is(temp1,temp2)
-
-def test_get_mem_reshape():
-    temp_gpu_mem = ggmm.TempGPUMem()
-    temp1 = temp_gpu_mem.get_mem((5,10),'temp1')
-    temp2 = temp_gpu_mem.get_mem((6,11),'temp1')
-    assert_is_not(temp1,temp2)
-    assert_equals(temp2.shape, (6,11))
-
-def test_free_mem():
-    temp_gpu_mem = ggmm.TempGPUMem()
-    temp1 = temp_gpu_mem.get_mem((5,10),'temp1')
-    temp_gpu_mem.free('temp1')
-    temp2 = temp_gpu_mem.get_mem((5,10),'temp1')
-    assert_is_not(temp1, temp2)
-
-def test_clear_mem():
-    temp_gpu_mem = ggmm.TempGPUMem()
-    temp1 = temp_gpu_mem.get_mem((5,10),'temp1')
-    temp_gpu_mem.clear()
-    temp2 = temp_gpu_mem.get_mem((5,10),'temp1')
-    assert_is_not(temp1, temp2)
-
-
-
-    
-
-
-# ------------------------------------------
-# _log_multivariate_normal_density_diag
-# ------------------------------------------
-def test_log_multivariate_normal_density_diag():
-    N,K,D = 100,8,4 # num_obs, num_components, num_dimensions
-    random_state = np.random.RandomState(123)
-    means = random_state.randn(K,D)
-    covars = random_state.rand(K,D)
-    X = random_state.randn(N,D)
-    means_gpu = ggmm.return_CUDAMatrix(means)
-    covars_gpu = ggmm.return_CUDAMatrix(covars)
-    X_gpu = ggmm.return_CUDAMatrix(X)
-    temp_gpu_mem = ggmm.TempGPUMem()
-
-
-    lpr_cpu = cgmm._log_multivariate_normal_density_diag(X,means,covars)
-    lpr_gpu = ggmm._log_multivariate_normal_density_diag(X_gpu,means_gpu,covars_gpu,temp_gpu_mem)
-
-    max_dev = np.max(np.abs((lpr_gpu.asarray() - lpr_cpu)/(lpr_cpu+EPS)))
-    assert_less(max_dev,1e-5)
-
-# ------------------------------------------
-# GMM.score_samples
-# ------------------------------------------
-def test_score_samples():
-    N,K,D = 100,8,4 # num_obs, num_components, num_dimensions
-    random_state = np.random.RandomState(123)
-    weights = random_state.rand(K)
-    weights /= weights.sum()
-    means = random_state.randn(K,D)
-    covars = random_state.rand(K,D)
-    X = random_state.randn(N,D)
-
-    gmm_cpu = cgmm.GMM(K,D)
-    gmm_cpu.set_weights(weights)
-    gmm_cpu.set_means(means)
-    gmm_cpu.set_covars(covars)
-
-    gmm_gpu = ggmm.GMM(K,D)
-    gmm_gpu.set_weights(weights)
-    gmm_gpu.set_means(means)
-    gmm_gpu.set_covars(covars)
-
-    logprob_cpu, posterior_cpu = gmm_cpu.score_samples(X)
-    logprob_gpu, posterior_gpu = gmm_gpu.score_samples(X)
-
-    max_logprob_dev = np.max(np.abs((logprob_gpu.asarray().flatten() - logprob_cpu)/(logprob_cpu+EPS)))
-    max_posterior_dev = np.max(np.abs((posterior_gpu.asarray() - posterior_cpu)/(posterior_cpu+EPS)))
-
-    assert_less(max_logprob_dev, 1e-5)
-    assert_less(max_posterior_dev, 1e-4)
 
 
 # ------------------------------------------
@@ -159,7 +67,7 @@ def test_set_weights():
     input_weights = np.random.rand(5).astype('float32')
     input_weights /= input_weights.sum()
     gmm.set_weights(input_weights)
-    assert_true(np.all(gmm.get_weights() == input_weights[:,None]))
+    assert_true(np.all(gmm.get_weights() == input_weights))
     assert_false(gmm.get_weights() is input_weights)
 
 # ------------------------------------------
@@ -224,42 +132,94 @@ def test_set_covars_min_covar():
     assert_true(np.all(gmm.get_covars() == input_covars))
     assert_false(gmm.get_covars() is input_covars)
 
+
 # ------------------------------------------
-# fit
+# _log_multivariate_normal_density_diag
 # ------------------------------------------
-
-def test_fit():
-    K,D = 2,2
-    gmm = ggmm.GMM(K,D)
-
-    random_state = np.random.RandomState(seed=123)
-
-    N = 1000
-    true_means = np.array([[5,3],[-5,-3]]).astype('float32')
-    true_covars = np.array([[1,1],[1,1]]).astype('float32')
-    true_weights = np.array([0.5,0.5]).astype('float32')
-    sample_component = np.where(random_state.multinomial(1,true_weights,size=N))[1]
-    sample_mean = true_means[sample_component]
-    sample_noise = np.sqrt(true_covars[sample_component])*random_state.randn(N,D).astype('float32')
-    samples = sample_mean + sample_noise
+def test_log_multivariate_normal_density_diag():
+    N,K,D = 100,8,4 # num_obs, num_components, num_dimensions
+    random_state = np.random.RandomState(123)
+    means = random_state.randn(K,D)
+    covars = random_state.rand(K,D)
+    X = random_state.randn(N,D)
 
 
-    gmm.fit(samples,n_init=3,random_state=random_state)
+    lpr_cpu = cgmm._log_multivariate_normal_density_diag(X,means,covars)
+    lpr_gpu = ggmm._log_multivariate_normal_density_diag(X,means,covars)
 
-    # match learned components to true components
-    if (np.sum(np.abs(true_means - gmm.get_means())) 
-            > np.sum(np.abs(true_means - gmm.get_means()[::-1]))):
-        true_means = true_means[::-1]
-        true_covars = true_covars[::-1]
-        true_weights = true_weights[::-1]
+    max_dev = np.max(np.abs((lpr_gpu.asarray() - lpr_cpu)/(lpr_cpu+EPS)))
+    assert_less(max_dev,1e-5)
 
-    assert_less(np.max(np.abs(gmm.get_means() - true_means)), 0.1)
+if 0:
 
-    raise ValueError
+    # ------------------------------------------
+    # GMM.score_samples
+    # ------------------------------------------
+    def test_score_samples():
+        N,K,D = 100,8,4 # num_obs, num_components, num_dimensions
+        random_state = np.random.RandomState(123)
+        weights = random_state.rand(K)
+        weights /= weights.sum()
+        means = random_state.randn(K,D)
+        covars = random_state.rand(K,D)
+        X = random_state.randn(N,D)
+
+        gmm_cpu = cgmm.GMM(K,D)
+        gmm_cpu.set_weights(weights)
+        gmm_cpu.set_means(means)
+        gmm_cpu.set_covars(covars)
+
+        gmm_gpu = ggmm.GMM(K,D)
+        gmm_gpu.set_weights(weights)
+        gmm_gpu.set_means(means)
+        gmm_gpu.set_covars(covars)
+
+        logprob_cpu, posterior_cpu = gmm_cpu.score_samples(X)
+        logprob_gpu, posterior_gpu = gmm_gpu.score_samples(X)
+
+        max_logprob_dev = np.max(np.abs((logprob_gpu.asarray().flatten() - logprob_cpu)/(logprob_cpu+EPS)))
+        max_posterior_dev = np.max(np.abs((posterior_gpu.asarray() - posterior_cpu)/(posterior_cpu+EPS)))
+
+        assert_less(max_logprob_dev, 1e-5)
+        assert_less(max_posterior_dev, 1e-4)
+
+
+    # ------------------------------------------
+    # fit
+    # ------------------------------------------
+
+    def test_fit():
+        K,D = 2,2
+        gmm = ggmm.GMM(K,D)
+
+        random_state = np.random.RandomState(seed=123)
+
+        N = 1000
+        true_means = np.array([[5,3],[-5,-3]]).astype('float32')
+        true_covars = np.array([[1,1],[1,1]]).astype('float32')
+        true_weights = np.array([0.5,0.5]).astype('float32')
+        sample_component = np.where(random_state.multinomial(1,true_weights,size=N))[1]
+        sample_mean = true_means[sample_component]
+        sample_noise = np.sqrt(true_covars[sample_component])*random_state.randn(N,D).astype('float32')
+        samples = sample_mean + sample_noise
+
+
+        gmm.fit(samples,n_init=3,random_state=random_state)
+
+        # match learned components to true components
+        if (np.sum(np.abs(true_means - gmm.get_means())) 
+                > np.sum(np.abs(true_means - gmm.get_means()[::-1]))):
+            true_means = true_means[::-1]
+            true_covars = true_covars[::-1]
+            true_weights = true_weights[::-1]
+
+        assert_less(np.max(np.abs(gmm.get_means() - true_means)), 0.1)
+
+        raise ValueError
 
 
 
-        
+            
 
 
 

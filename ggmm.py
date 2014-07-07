@@ -6,13 +6,14 @@ of Gaussian Mixture Models.
 """
 
 # Author: Eric Battenberg <ebattenberg@gmail.com>
-# Based on gmm.py from sklearn
+# Interface initially based on gmm.py from sklearn
 
 import cudamat as cm
 import logging
 import numbers
 import numpy as np
 import sys
+import ctypes as ct
 
 from scipy import linalg
 
@@ -361,13 +362,13 @@ class GMM(object):
             raise ValueError, 'input weight vector must sum to 1.0'
         if np.any(weights < 0.0):
             raise ValueError, 'input weight values must be non-negative'
-        self.weights = return_CUDAMatrix(weights)
+        self.weights = weights.copy()
 
     def set_means(self,means):
         if means.shape != (self.K,self.D):
             raise ValueError, 'input mean matrix is of shape %s, should be %s' % (
                     means.shape,(self.K,self.D))
-        self.means = return_CUDAMatrix(means)
+        self.means = means.copy()
 
     def set_covars(self,covars):
         if covars.shape != (self.K,self.D):
@@ -381,16 +382,16 @@ class GMM(object):
             if self.verbose:
                 print 'input covars less than min_covar (%g) have been set to %g' % (self.min_covar,self.min_covar)
 
-        self.covars = return_CUDAMatrix(covars_)
+        self.covars = covars_
 
     def get_weights(self):
-        return self.weights.asarray()
+        return self.weights
 
     def get_means(self):
-        return self.means.asarray()
+        return self.means
 
     def get_covars(self):
-        return self.covars.asarray()
+        return self.covars
 
     def score_samples(self, X):
         """Return the per-sample likelihood of the data under the model.
@@ -422,14 +423,14 @@ class GMM(object):
                     X.shape,(X.shape[0],self.D))
 
         N = X.shape[0]
-        X_gpu = return_CUDAMatrix(X)
+        #X_gpu = return_CUDAMatrix(X)
 
         #maintain_temp_gpu_mem(self.temp_gpu_mem, N, self.K, self.D)
 
         # lpr = log_multivariate_normal_density() + np.log(self.weights)[None,:]
         # -----------------------------------------------------
         posteriors_NxK = log_multivariate_normal_density(
-                X_gpu, self.means, self.covars, 
+                X, self.means, self.covars, 
                 self.covariance_type,self.temp_gpu_mem)
         # lpr += np.log(self.weights)
         #temp_Kx1 = self.temp_gpu_mem['Kx1']
@@ -604,22 +605,25 @@ class GMM(object):
 
 
         # copy observations to GPU
-        X_gpu = return_CUDAMatrix(X)
+        #X_gpu = return_CUDAMatrix(X)
 
         max_log_prob = -np.infty
 
         for _ in xrange(n_init):
             if 'm' in init_params or self.means is None:
                 perm = random_state.permutation(N)
-                self.means = return_CUDAMatrix(X[perm[:self.K]])
+                #self.means = return_CUDAMatrix(X[perm[:self.K]])
+                self.means = X[perm[:self.K]].copy()
 
             if 'w' in init_params or self.weights is None:
-                self.weights = return_CUDAMatrix((1.0/self.K)*np.ones(self.K))
+                #self.weights = return_CUDAMatrix((1.0/self.K)*np.ones(self.K))
+                self.weights = ((1.0/self.K)*np.ones(self.K))
 
             if 'c' in init_params or self.covars is None:
                 if self.covariance_type == 'diag':
                     cv = np.var(X,axis=0) + self.min_covar
-                    self.covars = return_CUDAMatrix(np.tile(cv, (self.K,1)))
+                    #self.covars = return_CUDAMatrix(np.tile(cv, (self.K,1)))
+                    self.covars = np.tile(cv, (self.K,1))
                 else:
                     raise ValueError, 'unsupported covariance type: %s' % self.covariance_type
 
@@ -742,54 +746,79 @@ class GMM(object):
 #########################################################################
 
 
-def _log_multivariate_normal_density_diag(X, means, covars, temp_gpu_mem):
+def _log_multivariate_normal_density_diag(X, means, covars):
     """Compute Gaussian log-density at X for a diagonal model"""
 
     N, D = X.shape
     K = means.shape[0]
 
-    #maintain_temp_gpu_mem(temp_gpu_mem,N,K,D)
+    X = np.asfortranarray(X, dtype=np.float32)
+    means = np.asfortranarray(means, dtype=np.float32)
+    covars = np.asfortranarray(covars, dtype=np.float32)
+    lpr_NxK = np.asfortranarray(np.empty((N,K), dtype=np.float32))
 
-    lpr_NxK = temp_gpu_mem.get_mem((N,K),'posteriors_NxK')
-    temp_KxD = temp_gpu_mem.get_mem((K,D),'temp_KxD')
-    inv_covars_KxD = temp_gpu_mem.get_mem((K,D),'inv_covars_KxD')
-    temp_Kx1 = temp_gpu_mem.get_mem((K,1), 'temp_Kx1')
-    temp_NxD = temp_gpu_mem.get_mem((N,D), 'temp_NxD')
+    X_gpu = cm.CUDAMatrix(X)
+    means_gpu = cm.CUDAMatrix(means)
+    covars_gpu = cm.CUDAMatrix(covars)
+    lpr_gpu = cm.empty((N,K))
 
-    # compute inverse variances
-    inv_covars_KxD.assign(1.0)
-    inv_covars_KxD.divide(covars)
 
-    # lpr = D * np.log(2*np.pi)
-    lpr_NxK.assign(D * np.log(2*np.pi))
+    ggmm_kernels.log_multivariate_normal_density_diag(
+            X_gpu.p_mat,
+            means_gpu.p_mat,
+            covars_gpu.p_mat,
+            lpr_gpu.p_mat)
 
-    # temp_Kx1 =  np.sum(np.log(covars), 1)
-    cm.log(covars,target=temp_KxD)
-    temp_KxD.sum(axis=1, target=temp_Kx1)
+    lpr = lpr_gpu.asarray()
 
-    # temp_Kx1 += np.sum((means**2)/covars, 1)
-    means.mult(means, target=temp_KxD)
-    temp_KxD.mult(inv_covars_KxD)
-    temp_Kx1.add_sums(temp_KxD,axis=1)
+    return lpr
 
-    # lpr += temp_Kx1
-    lpr_NxK.add_row_vec(temp_Kx1.reshape((1,K)))
-    temp_Kx1.reshape((K,1)) # return to original shape
 
-    # lpr += -2*np.dot(X, (means / covars).T)
-    temp_KxD.assign(means)
-    temp_KxD.mult(inv_covars_KxD)
-    lpr_NxK.add_dot(X,temp_KxD.T, mult=-2.)
 
-    # lpr += np.dot(X**2, (1.0 / covars).T)
-    temp_NxD.assign(X)
-    temp_NxD.mult(temp_NxD)
-    lpr_NxK.add_dot(temp_NxD, inv_covars_KxD.T)
 
-    # lpr *= -0.5
-    lpr_NxK.mult(-0.5)
+    if 0:
 
-    # lpr_NxK still in use
+        #maintain_temp_gpu_mem(temp_gpu_mem,N,K,D)
+        lpr_NxK = temp_gpu_mem.get_mem((N,K),'posteriors_NxK')
+        temp_KxD = temp_gpu_mem.get_mem((K,D),'temp_KxD')
+        inv_covars_KxD = temp_gpu_mem.get_mem((K,D),'inv_covars_KxD')
+        temp_Kx1 = temp_gpu_mem.get_mem((K,1), 'temp_Kx1')
+        temp_NxD = temp_gpu_mem.get_mem((N,D), 'temp_NxD')
+
+        # compute inverse variances
+        inv_covars_KxD.assign(1.0)
+        inv_covars_KxD.divide(covars)
+
+        # lpr = D * np.log(2*np.pi)
+        lpr_NxK.assign(D * np.log(2*np.pi))
+
+        # temp_Kx1 =  np.sum(np.log(covars), 1)
+        cm.log(covars,target=temp_KxD)
+        temp_KxD.sum(axis=1, target=temp_Kx1)
+
+        # temp_Kx1 += np.sum((means**2)/covars, 1)
+        means.mult(means, target=temp_KxD)
+        temp_KxD.mult(inv_covars_KxD)
+        temp_Kx1.add_sums(temp_KxD,axis=1)
+
+        # lpr += temp_Kx1
+        lpr_NxK.add_row_vec(temp_Kx1.reshape((1,K)))
+        temp_Kx1.reshape((K,1)) # return to original shape
+
+        # lpr += -2*np.dot(X, (means / covars).T)
+        temp_KxD.assign(means)
+        temp_KxD.mult(inv_covars_KxD)
+        lpr_NxK.add_dot(X,temp_KxD.T, mult=-2.)
+
+        # lpr += np.dot(X**2, (1.0 / covars).T)
+        temp_NxD.assign(X)
+        temp_NxD.mult(temp_NxD)
+        lpr_NxK.add_dot(temp_NxD, inv_covars_KxD.T)
+
+        # lpr *= -0.5
+        lpr_NxK.mult(-0.5)
+
+        # lpr_NxK still in use
 
     '''
     lpr = -0.5 * (D * np.log(2 * np.pi) + np.sum(np.log(covars), 1)
