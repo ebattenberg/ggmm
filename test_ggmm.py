@@ -12,7 +12,7 @@ EPS = 1e-6
 # logging
 # ----------------------------------------------------------------------
 script_name = os.path.basename(__file__)
-log_file = script_name.replace('.py','.log')
+log_file = os.path.splitext(script_name)[0] + '.log'
 log_format = '%(asctime)s %(levelname)s (%(name)s) %(message)s'
 logging.basicConfig(filename=log_file,level=logging.DEBUG,format=log_format)
 logger = logging.getLogger(os.path.basename(__file__))
@@ -22,6 +22,46 @@ def setup():
 
 def teardown():
     ggmm.shutdown() # deactivates cublas
+
+# ------------------------------------------
+# TempGPUMem
+# ------------------------------------------
+
+def test_get_mem():
+    temp_gpu_mem = ggmm.TempGPUMem()
+    temp1 = temp_gpu_mem.get_mem((5,10),'temp1')
+    assert_equals(temp1.shape, (5,10))
+
+def test_get_mem_again():
+    temp_gpu_mem = ggmm.TempGPUMem()
+    temp1 = temp_gpu_mem.get_mem((5,10), 'temp1')
+    temp2 = temp_gpu_mem.get_mem((5,10),'temp1')
+    assert_is(temp1,temp2)
+
+def test_get_mem_reshape():
+    temp_gpu_mem = ggmm.TempGPUMem()
+    temp1 = temp_gpu_mem.get_mem((5,10),'temp1')
+    temp2 = temp_gpu_mem.get_mem((6,11),'temp1')
+    assert_is_not(temp1,temp2)
+    assert_equals(temp2.shape, (6,11))
+
+def test_free_mem():
+    temp_gpu_mem = ggmm.TempGPUMem()
+    temp1 = temp_gpu_mem.get_mem((5,10),'temp1')
+    temp_gpu_mem.free('temp1')
+    temp2 = temp_gpu_mem.get_mem((5,10),'temp1')
+    assert_is_not(temp1, temp2)
+
+def test_clear_mem():
+    temp_gpu_mem = ggmm.TempGPUMem()
+    temp1 = temp_gpu_mem.get_mem((5,10),'temp1')
+    temp_gpu_mem.clear()
+    temp2 = temp_gpu_mem.get_mem((5,10),'temp1')
+    assert_is_not(temp1, temp2)
+
+
+
+    
 
 
 # ------------------------------------------
@@ -36,7 +76,7 @@ def test_log_multivariate_normal_density_diag():
     means_gpu = ggmm.return_CUDAMatrix(means)
     covars_gpu = ggmm.return_CUDAMatrix(covars)
     X_gpu = ggmm.return_CUDAMatrix(X)
-    temp_gpu_mem = ggmm.maintain_temp_gpu_mem({},N,K,D)
+    temp_gpu_mem = ggmm.TempGPUMem()
 
 
     lpr_cpu = cgmm._log_multivariate_normal_density_diag(X,means,covars)
