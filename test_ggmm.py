@@ -183,6 +183,14 @@ def test_score_samples():
     assert_less(max_logprob_dev, 1e-5)
     assert_less(max_posterior_dev, 1e-4)
 
+def test_do_mstep():
+    raise NotImplementedError
+
+def test_time_estep():
+    raise NotImplementedError
+
+
+
 if 0:
 
     # ------------------------------------------
