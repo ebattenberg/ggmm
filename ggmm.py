@@ -66,7 +66,10 @@ def log_multivariate_normal_density(X, means, covars, covariance_type='diag',tem
         temp_gpu_mem = TempGPUMem()
         temp_gpu_mem.alloc(N,K,D)
     return log_multivariate_normal_density_dict[covariance_type](
-        X, means, covars,temp_gpu_mem)
+        return_CUDAMatrix(X),
+        return_CUDAMatrix(means),
+        return_CUDAMatrix(covars),
+        temp_gpu_mem)
 
 
 def check_random_state(seed):
@@ -159,32 +162,46 @@ def return_CUDAMatrix(input_array):
     else:
         raise ValueError, 'cannot handle input of type: %s' % (type(input_array),)
 
-class TempGPUMem(dict):
+def return_NumpyArray(input_array):
+    '''
+    If input is a numpy_array, return input
+    If input is a CUDAMatrix, return numpy array
+    '''
+    if isinstance(input_array,np.ndarray):
+        return input_array
+    elif isinstance(input_array,cm.CUDAMatrix):
+        if input_array.shape[1] == 1:
+            return input_array.asarray().flatten()
+        else:
+            return input_array.asarray()
+        return input_array
+    else:
+        raise ValueError, 'cannot handle input of type: %s' % (type(input_array),)
 
-    def alloc(self, N, K, D, key_shape_mapping=None):
+class TempGPUMem(dict):
+    def alloc(self, *args):
         '''
-        make sure temporary gpu memory is of correct size
+        Allocate temporary GPU memory
+
+        alloc(N,K,D)
+        allo(key_shape_mapping)
         '''
-        if key_shape_mapping is None:
+        if len(args) == 3:
+            N,K,D = args
             key_shape_mapping = {
-                    'NxK' :         (N,K),
-                    'NxK(2)' :      (N,K),
-                    'KxD' :         (K,D),
-                    'KxD(2)' :      (K,D),
-                    'Kx1' :         (K,1),
-                    'Nx1' :         (N,1),
-                    'Nx1(2)' :      (N,1),
-                    'NxD' :         (N,D),
+                    'posteriors_NxK' :  (N,K),
+                    'inv_covars_KxD' :  (K,D),
+                    'vmax_Nx1' :        (N,1),
+                    'logprob_Nx1' :     (N,1),
+                    'temp_NxD' :        (N,D),
+                    'temp_NxK' :        (N,K),
+                    'temp_KxD' :        (K,D),
+                    'temp_Kx1' :        (K,1),
             }
-        # deallocate unneeded memory
-        for key,shape in self.iteritems():
-            if (not key_shape_mapping.has_key(key) 
-                    or shape != key_shape_mapping[key]):
-                self.pop(key)
-                logger.debug('%s: removed %s at key %s' % (
-                    sys._getframe().f_code.co_name,
-                    shape,
-                    key))
+        elif len(args) == 1:
+            key_shape_mapping = args[0]
+        else:
+            ValueError, 'TempGPUMem: alloc(N,K,D) or alloc(key_shape_mapping)'
 
         # allocate memory
         for key,shape in key_shape_mapping.iteritems():
@@ -194,6 +211,28 @@ class TempGPUMem(dict):
                     shape,
                     key))
                 self[key] = cm.empty(shape)
+            elif self[key] != shape:
+                logger.debug('%s: reshaped %s from %s to %s' % (
+                    sys._getframe().f_code.co_name, 
+                    nameid,
+                    self.allocations[nameid].shape,
+                    shape))
+                self.allocations[nameid] = cm.empty(shape)
+
+        if 0:
+            # deallocate unneeded memory
+            for key,shape in self.iteritems():
+                if (not key_shape_mapping.has_key(key) 
+                        or shape != key_shape_mapping[key]):
+                    self.pop(key)
+                    logger.debug('%s: removed %s at key %s' % (
+                        sys._getframe().f_code.co_name,
+                        shape,
+                        key))
+
+    def dealloc(self):
+        self.clear()
+
 
 
 def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
@@ -356,7 +395,7 @@ class GMM(object):
         if covars.shape != (self.K,self.D):
             raise ValueError, 'input covars matrix is of shape %s, should be %s' % (
                     covars.shape,(self.K,self.D))
-        covars_ = covars.copy()
+        covars_ = return_NumpyArray(covars).copy()
         if np.any(covars_ < 0):
             raise ValueError, 'input covars must be non-negative'
         if np.any(covars_ < self.min_covar):
@@ -367,7 +406,7 @@ class GMM(object):
         self.covars = return_CUDAMatrix(covars_)
 
     def get_weights(self):
-        return self.weights.asarray()
+        return self.weights.asarray().flatten()
 
     def get_means(self):
         return self.means.asarray()
@@ -375,7 +414,7 @@ class GMM(object):
     def get_covars(self):
         return self.covars.asarray()
 
-    def score_samples(self, X):
+    def score_samples(self, X, temp_gpu_mem=None):
         """Return the per-sample likelihood of the data under the model.
 
         Compute the log probability of X under the model and
@@ -404,19 +443,24 @@ class GMM(object):
             raise ValueError, 'input data matrix X is of shape %s, should be %s' % (
                     X.shape,(X.shape[0],self.D))
 
-        N = X.shape[0]
-        X_gpu = return_CUDAMatrix(X)
 
-        #maintain_temp_gpu_mem(self.temp_gpu_mem, N, self.K, self.D)
+        N = X.shape[0]
+
+        if temp_gpu_mem is None:
+            temp_gpu_mem = TempGPUMem()
+            temp_gpu_mem.alloc(N,self.K,self.D)
+
+
+        #maintain_temp_gpu_mem(temp_gpu_mem, N, self.K, self.D)
 
         # lpr = log_multivariate_normal_density() + np.log(self.weights)[None,:]
         # -----------------------------------------------------
         posteriors_NxK = log_multivariate_normal_density(
-                X_gpu, self.means, self.covars, 
-                self.covariance_type,self.temp_gpu_mem)
+                X, self.means, self.covars, 
+                self.covariance_type,temp_gpu_mem)
         # lpr += np.log(self.weights)
-        #temp_Kx1 = self.temp_gpu_mem['Kx1']
-        temp_Kx1 = self.temp_gpu_mem.get_mem((self.K,1), 'temp_Kx1')
+        #temp_Kx1 = temp_gpu_mem['Kx1']
+        temp_Kx1 = temp_gpu_mem['temp_Kx1']
         cm.log(self.weights, target=temp_Kx1)
         posteriors_NxK.add_row_vec(temp_Kx1.reshape((1,self.K)))
         temp_Kx1.reshape((self.K,1))
@@ -426,14 +470,14 @@ class GMM(object):
         #logprob_Nx1 = np.log(np.sum(np.exp(lpr - vmax), axis=1))
         #logprob_Nx1 += vmax
         # ---------------------------------------------------------
-        #vmax = self.temp_gpu_mem['Nx1']
-        vmax_Nx1 = self.temp_gpu_mem.get_mem((N,1), 'vmax_Nx1')
-        #logprob_Nx1 = self.temp_gpu_mem['Nx1(2)']
-        logprob_Nx1 = self.temp_gpu_mem.get_mem((N,1), 'logprob_Nx1')
+        #vmax = temp_gpu_mem['Nx1']
+        vmax_Nx1 = temp_gpu_mem['vmax_Nx1']
+        #logprob_Nx1 = temp_gpu_mem['Nx1(2)']
+        logprob_Nx1 = temp_gpu_mem['logprob_Nx1']
         # vmax_Nx1 = np.max(lpr,axis=1)
         posteriors_NxK.max(axis=1, target=vmax_Nx1)
-        #temp_NxK = self.temp_gpu_mem['NxK(2)']
-        temp_NxK = self.temp_gpu_mem.get_mem((N,self.K), 'temp_NxK')
+        #temp_NxK = temp_gpu_mem['NxK(2)']
+        temp_NxK = temp_gpu_mem['temp_NxK']
         # temp_NxK = lpr - vmax_Nx1[:,None]
         posteriors_NxK.add_col_mult(vmax_Nx1, -1.0, target=temp_NxK)
         # temp_NxK = np.exp(temp_NxK)
@@ -594,15 +638,15 @@ class GMM(object):
         for _ in xrange(n_init):
             if 'm' in init_params or self.means is None:
                 perm = random_state.permutation(N)
-                self.means = return_CUDAMatrix(X[perm[:self.K]])
+                self.means = X[perm[:self.K]].copy()
 
             if 'w' in init_params or self.weights is None:
-                self.weights = return_CUDAMatrix((1.0/self.K)*np.ones(self.K))
+                self.weights = (1.0/self.K)*np.ones(self.K)
 
             if 'c' in init_params or self.covars is None:
                 if self.covariance_type == 'diag':
                     cv = np.var(X,axis=0) + self.min_covar
-                    self.covars = return_CUDAMatrix(np.tile(cv, (self.K,1)))
+                    self.covars = np.tile(cv, (self.K,1))
                 else:
                     raise ValueError, 'unsupported covariance type: %s' % self.covariance_type
 
@@ -653,12 +697,12 @@ class GMM(object):
         """ Perform the Mstep of the EM algorithm and return the class weights.
         """
 
-        weights = self.temp_gpu_mem.get_mem((1,self.K), 'temp_1xK')
+        weights = temp_gpu_mem['temp_1xK']
         posteriors.sum(axis=0, target=weights) # 1xK
-        weighted_X_sum = self.temp_gpu_mem.get_mem((self.K,self.D), 'temp_KxD')
+        weighted_X_sum = temp_gpu_mem['temp_KxD']
         cm.dot(posteriors.T, X, target=weighted_X_sum)
         #inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
-        inverse_weights = self.temp_gpu_mem.get_mem((1,self.K), 'inverse_weights')
+        inverse_weights = temp_gpu_mem['inverse_weights']
         inverse_weights.assign(1.0)
         inverse_weights.divide(weights)
 
@@ -731,13 +775,11 @@ def _log_multivariate_normal_density_diag(X, means, covars, temp_gpu_mem):
     N, D = X.shape
     K = means.shape[0]
 
-    #maintain_temp_gpu_mem(temp_gpu_mem,N,K,D)
-
-    lpr_NxK = temp_gpu_mem.get_mem((N,K),'posteriors_NxK')
-    temp_KxD = temp_gpu_mem.get_mem((K,D),'temp_KxD')
-    inv_covars_KxD = temp_gpu_mem.get_mem((K,D),'inv_covars_KxD')
-    temp_Kx1 = temp_gpu_mem.get_mem((K,1), 'temp_Kx1')
-    temp_NxD = temp_gpu_mem.get_mem((N,D), 'temp_NxD')
+    lpr_NxK = temp_gpu_mem['posteriors_NxK']
+    inv_covars_KxD = temp_gpu_mem['inv_covars_KxD']
+    temp_NxD = temp_gpu_mem['temp_NxD']
+    temp_KxD = temp_gpu_mem['temp_KxD']
+    temp_Kx1 = temp_gpu_mem['temp_Kx1']
 
     # compute inverse variances
     inv_covars_KxD.assign(1.0)
