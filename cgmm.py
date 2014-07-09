@@ -552,6 +552,7 @@ class GMM(object):
         weighted_X_sum = np.dot(responsibilities.T, X)
         inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
 
+
         if 'w' in update_params:
             self.weights = (weights / (weights.sum() + 10 * EPS) + EPS)
         if 'm' in update_params:
@@ -561,6 +562,7 @@ class GMM(object):
             self.covars = covar_mstep_func(
                 self, X, responsibilities, weighted_X_sum, inverse_weights,
                 min_covar)
+
         return weights
 
     def _n_parameters(self):
@@ -729,6 +731,7 @@ def _covar_mstep_diag(gmm, X, responsibilities, weighted_X_sum, norm,
     avg_X2 = np.dot(responsibilities.T, X * X) * norm
     avg_means2 = gmm.means ** 2
     avg_X_means = gmm.means * weighted_X_sum * norm
+    #import pdb; pdb.set_trace()
     return avg_X2 - 2 * avg_X_means + avg_means2 + min_covar
 
 

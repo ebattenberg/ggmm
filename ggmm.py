@@ -189,14 +189,17 @@ class TempGPUMem(dict):
         if len(args) == 3:
             N,K,D = args
             key_shape_mapping = {
-                    'posteriors_NxK' :  (N,K),
-                    'inv_covars_KxD' :  (K,D),
-                    'vmax_Nx1' :        (N,1),
-                    'logprob_Nx1' :     (N,1),
-                    'temp_NxD' :        (N,D),
-                    'temp_NxK' :        (N,K),
-                    'temp_KxD' :        (K,D),
-                    'temp_Kx1' :        (K,1),
+                    'posteriors_NxK' :      (N,K), 
+                    'weighted_X_sum_KxD' :  (K,D),
+                    'vmax_Nx1' :            (N,1),
+                    'logprob_Nx1' :         (N,1),
+                    'inv_weights_Kx1' :     (K,1),
+                    'temp_NxD' :            (N,D),
+                    'temp_NxK' :            (N,K),
+                    'temp_KxD' :            (K,D),
+                    'temp_KxD_2' :          (K,D),
+                    'temp_Kx1' :            (K,1),
+                    'temp_Kx1_2' :          (K,1),
             }
         elif len(args) == 1:
             key_shape_mapping = args[0]
@@ -214,10 +217,10 @@ class TempGPUMem(dict):
             elif self[key] != shape:
                 logger.debug('%s: reshaped %s from %s to %s' % (
                     sys._getframe().f_code.co_name, 
-                    nameid,
-                    self.allocations[nameid].shape,
+                    key,
+                    self[key].shape,
                     shape))
-                self.allocations[nameid] = cm.empty(shape)
+                self[key] = cm.empty(shape)
 
         if 0:
             # deallocate unneeded memory
@@ -232,8 +235,6 @@ class TempGPUMem(dict):
 
     def dealloc(self):
         self.clear()
-
-
 
 def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
                     random_state=None):
@@ -280,7 +281,6 @@ def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
         rand = np.dot(U, rand)
 
     return (rand.T + mean).T
-
 
 class GMM(object):
     """Gaussian Mixture Model
@@ -448,7 +448,7 @@ class GMM(object):
 
         if temp_gpu_mem is None:
             temp_gpu_mem = TempGPUMem()
-            temp_gpu_mem.alloc(N,self.K,self.D)
+        temp_gpu_mem.alloc(N,self.K,self.D)
 
 
         #maintain_temp_gpu_mem(temp_gpu_mem, N, self.K, self.D)
@@ -462,8 +462,9 @@ class GMM(object):
         #temp_Kx1 = temp_gpu_mem['Kx1']
         temp_Kx1 = temp_gpu_mem['temp_Kx1']
         cm.log(self.weights, target=temp_Kx1)
-        posteriors_NxK.add_row_vec(temp_Kx1.reshape((1,self.K)))
-        temp_Kx1.reshape((self.K,1))
+        temp_Kx1.reshape((1,self.K)) # transpose
+        posteriors_NxK.add_row_vec(temp_Kx1)
+        temp_Kx1.reshape((self.K,1)) # original shape
         # in use: lpr -> 'NxK'
 
 
@@ -622,6 +623,7 @@ class GMM(object):
 
         X = np.asarray(X, dtype=np.float32)
         N = X.shape[0]
+        K,D = self.K,self.D
 
         if X.shape[0] < self.K:
             raise ValueError(
@@ -633,20 +635,24 @@ class GMM(object):
         # copy observations to GPU
         X_gpu = return_CUDAMatrix(X)
 
+        # allocate TempGPUMem
+        temp_gpu_mem = TempGPUMem()
+        temp_gpu_mem.alloc(N,K,D)
+
         max_log_prob = -np.infty
 
         for _ in xrange(n_init):
             if 'm' in init_params or self.means is None:
                 perm = random_state.permutation(N)
-                self.means = X[perm[:self.K]].copy()
+                self.means = return_CUDAMatrix(X[perm[:self.K]])
 
             if 'w' in init_params or self.weights is None:
-                self.weights = (1.0/self.K)*np.ones(self.K)
+                self.weights = return_CUDAMatrix((1.0/self.K)*np.ones(self.K))
 
             if 'c' in init_params or self.covars is None:
                 if self.covariance_type == 'diag':
                     cv = np.var(X,axis=0) + self.min_covar
-                    self.covars = np.tile(cv, (self.K,1))
+                    self.covars = return_CUDAMatrix(np.tile(cv, (self.K,1)))
                 else:
                     raise ValueError, 'unsupported covariance type: %s' % self.covariance_type
 
@@ -655,7 +661,7 @@ class GMM(object):
             converged = False
             for i in xrange(n_iter):
                 # Expectation step
-                curr_log_likelihood, posteriors = self.score_samples(X_gpu)
+                curr_log_likelihood, posteriors = self.score_samples(X_gpu,temp_gpu_mem)
                 curr_log_likelihood_sum = curr_log_likelihood.sum(axis=0).asarray()[0,0]
                 log_likelihood.append(curr_log_likelihood_sum)
                 if verbose:
@@ -669,15 +675,19 @@ class GMM(object):
 
                 # Maximization step
                 self._do_mstep(X_gpu, posteriors, update_params,
-                               self.min_covar)
+                                self.min_covar,
+                                temp_gpu_mem)
 
             # if the results are better, keep it
             if n_iter:
                 if log_likelihood[-1] > max_log_prob:
                     max_log_prob = log_likelihood[-1]
-                    best_params = {'weights': self.weights,
-                                   'means': self.means,
-                                   'covars': self.covars}
+                if n_init > 1:
+                    best_params = {
+                            'weights': self.get_weights(),
+                            'means': self.get_means(),
+                            'covars': self.get_covars()
+                    }
         # check the existence of an init param that was not subject to
         # likelihood computation issue.
         if np.isneginf(max_log_prob) and n_iter:
@@ -686,38 +696,56 @@ class GMM(object):
                 "given initial parameters. Try different init parameters " +
                 "(or increasing n_init) or check for degenerate data.")
         # n_iter == 0 occurs when using GMM within HMM
-        if n_iter:
-            self.covars = best_params['covars']
-            self.means = best_params['means']
-            self.weights = best_params['weights']
+        if n_iter and n_init > 1:
+            self.covars = return_CUDAMatrix(best_params['covars'])
+            self.means = return_CUDAMatrix(best_params['means'])
+            self.weights = return_CUDAMatrix(best_params['weights'])
 
         return converged
 
-    def _do_mstep(self, X, posteriors, update_params, min_covar=0):
+    def _do_mstep(self, X, posteriors, update_params, min_covar=0, temp_gpu_mem=None):
         """ Perform the Mstep of the EM algorithm and return the class weights.
         """
 
-        weights = temp_gpu_mem['temp_1xK']
-        posteriors.sum(axis=0, target=weights) # 1xK
-        weighted_X_sum = temp_gpu_mem['temp_KxD']
-        cm.dot(posteriors.T, X, target=weighted_X_sum)
-        #inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
-        inverse_weights = temp_gpu_mem['inverse_weights']
-        inverse_weights.assign(1.0)
-        inverse_weights.divide(weights)
+        N = X.shape[0]
+        K,D = self.K, self.D
+
+        X = return_CUDAMatrix(X)
+
+        if temp_gpu_mem is None:
+            temp_gpu_mem = TempGPUMem()
+        temp_gpu_mem.alloc(N,K,D)
+
+        weights = temp_gpu_mem['temp_Kx1']
+
+        weights.reshape((1,K))
+        posteriors.sum(axis=0, target=weights)
+        weights.reshape((K,1))
+
+        weighted_X_sum = temp_gpu_mem['weighted_X_sum_KxD']
+        cm.dot(posteriors.T, X, target=weighted_X_sum) # [KxN]x[NxD] -> [KxD]
+        #inv_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
+        inv_weights = temp_gpu_mem['inv_weights_Kx1']
+        denom = temp_gpu_mem['temp_Kx1_2']
+        weights.add(10*EPS, target=denom)
+        inv_weights.assign(1.0)
+        inv_weights.divide(denom)
+
 
         if 'w' in update_params:
             #self.weights = (weights / (weights.sum() + 10 * EPS) + EPS)
-            weights.divide(weights.sum(axis=1), target=self.weights)
+            weights.div_by_row(weights.sum(axis=0).add(10*EPS), target=self.weights)
+            weights.add(EPS)
         if 'm' in update_params:
-            #self.means = weighted_X_sum * inverse_weights
-            weighted_X_sum.mult_by_col(inverse_weights.reshape((self.K,1)), target=self.means)
-            inverse_weights.reshape((1,self.K))
+            #self.means = weighted_X_sum * inv_weights
+            weighted_X_sum.mult_by_col(inv_weights, target=self.means) # [KxD].*[Kx1]
         if 'c' in update_params:
             covar_mstep_func = _covar_mstep_funcs[self.covariance_type]
-            self.covars = covar_mstep_func(
-                self, X, posteriors, weighted_X_sum, inverse_weights,
-                min_covar)
+            temp_result = covar_mstep_func(
+                self, X, posteriors, weighted_X_sum, inv_weights,
+                min_covar, temp_gpu_mem)
+            self.covars.assign(temp_result)
+
         return weights
 
     def _n_parameters(self):
@@ -763,7 +791,6 @@ class GMM(object):
         """
         return - 2 * self.score(X).sum() + 2 * self._n_parameters()
 
-
 #########################################################################
 ## some helper routines
 #########################################################################
@@ -776,7 +803,7 @@ def _log_multivariate_normal_density_diag(X, means, covars, temp_gpu_mem):
     K = means.shape[0]
 
     lpr_NxK = temp_gpu_mem['posteriors_NxK']
-    inv_covars_KxD = temp_gpu_mem['inv_covars_KxD']
+    inv_covars_KxD = temp_gpu_mem['temp_KxD_2']
     temp_NxD = temp_gpu_mem['temp_NxD']
     temp_KxD = temp_gpu_mem['temp_KxD']
     temp_Kx1 = temp_gpu_mem['temp_Kx1']
@@ -798,7 +825,8 @@ def _log_multivariate_normal_density_diag(X, means, covars, temp_gpu_mem):
     temp_Kx1.add_sums(temp_KxD,axis=1)
 
     # lpr += temp_Kx1
-    lpr_NxK.add_row_vec(temp_Kx1.reshape((1,K)))
+    temp_Kx1.reshape((1,K)) # transpose
+    lpr_NxK.add_row_vec(temp_Kx1)
     temp_Kx1.reshape((K,1)) # return to original shape
 
     # lpr += -2*np.dot(X, (means / covars).T)
@@ -864,13 +892,40 @@ def _validate_covars(covars, covariance_type, K):
                          "'spherical', 'tied', 'diag', 'full'")
 
 
-def _covar_mstep_diag(gmm, X, posteriors, weighted_X_sum, norm,
-                      min_covar):
+def _covar_mstep_diag(gmm, X, posteriors, weighted_X_sum, inv_weights,
+                      min_covar,temp_gpu_mem):
     """Performing the covariance M step for diagonal cases"""
-    avg_X2 = np.dot(posteriors.T, X * X) * norm
-    avg_means2 = gmm.means_ ** 2
-    avg_X_means = gmm.means_ * weighted_X_sum * norm
-    return avg_X2 - 2 * avg_X_means + avg_means2 + min_covar
+
+
+    X2 = temp_gpu_mem['temp_NxD']
+    X.mult(X, target=X2) # X2 = X*X
+
+    # avg_X2 = np.dot(posteriors.T, X2) * inv_weights # ([KxN]*[NxD]) * [Kx1]
+    avg_X2 = temp_gpu_mem['temp_KxD']
+    cm.dot(posteriors.T, X2, target=avg_X2) # [KxN]x[NxD] -> [KxD]
+    avg_X2.mult_by_col(inv_weights)
+
+    #avg_means2 = gmm.means_ ** 2
+    temp_KxD_2 = temp_gpu_mem['temp_KxD_2']
+    gmm.means.mult(gmm.means, target=temp_KxD_2)
+    # avg_X2 += avg_means2
+    avg_X2.add(temp_KxD_2)
+
+
+    #avg_X_means = gmm.means_ * weighted_X_sum * inv_weights
+    # [KxD]*[KxD]*[Kx1] -> [KxD]
+    gmm.means.mult(weighted_X_sum, target=temp_KxD_2)
+    temp_KxD_2.mult_by_col(inv_weights)
+    # avg_X2 -= 2*avg_X_means
+    #import pdb; pdb.set_trace()
+    avg_X2.add_mult(temp_KxD_2, alpha=-2.0)
+
+    # avg_X2 += min_covar
+    avg_X2.add(min_covar)
+
+    #return avg_X2 - 2 * avg_X_means + avg_means2 + min_covar
+    # [KxD] - 2*[KxD] + [KxD] + [1]
+    return avg_X2
 
 
 def _covar_mstep_spherical(*args):
