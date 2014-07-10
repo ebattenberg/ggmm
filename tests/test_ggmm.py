@@ -4,8 +4,8 @@ import os
 from nose.tools import *
 import numpy as np
 
-import ggmm
-import cgmm # for comparison tests
+import ggmm.gpu as ggmm
+import ggmm.cpu as cgmm # for comparison tests
 
 EPS = 1e-6
 
@@ -41,8 +41,9 @@ DIMENSIONS = [
 
 TIME_DIMENSIONS = [
         (1000,16,200),
-        (10000,128,13),
-        #(100000,256,40),
+        (1000,128,13),
+        #(10000,128,13),
+        #(100000,512,40),
         #(10000,512,40),
 ]
     
