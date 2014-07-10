@@ -18,6 +18,7 @@ X = some_module.load_training_data()
 N, D = X.shape 
 K = 128
 
+ggmm.init()
 gmm = ggmm.GMM(K,D)
 
 thresh = 1e-3
