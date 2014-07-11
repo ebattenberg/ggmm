@@ -28,7 +28,7 @@ ggmm_logger.setLevel(logging.WARNING)
 # ----------------------------------------------------------------------
 
 def setup():
-    ggmm.init(100000) # activates cublas
+    ggmm.init() # activates cublas
 
 def teardown():
     ggmm.shutdown() # deactivates cublas
