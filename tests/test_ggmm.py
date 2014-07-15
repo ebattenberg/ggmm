@@ -411,7 +411,7 @@ def check_fit(N,K,D):
     gmm_gpu.set_covars(covars)
 
     thresh = 0.0
-    n_iter = 10 
+    n_iter = 5
     init_params = ''
 
     gmm_cpu.fit(X, thresh, n_iter, init_params=init_params)
@@ -440,7 +440,7 @@ def check_time_fit(N,K,D):
     gmm_gpu = ggmm.GMM(K,D)
 
     thresh = 0.0
-    n_iter = 10
+    n_iter = 5
     init_params = 'wmc'
 
     gmm_cpu.fit(X, thresh, n_iter, init_params=init_params)

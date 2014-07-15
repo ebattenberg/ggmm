@@ -14,6 +14,9 @@ from scipy import linalg
 
 EPS = np.finfo(float).eps
 
+def init(*args):
+    pass
+
 
 def log_multivariate_normal_density(X, means, covars, covariance_type='diag'):
     """Compute the log probability under a multivariate Gaussian distribution.
@@ -511,7 +514,7 @@ class GMM(object):
                 curr_log_likelihood_sum = curr_log_likelihood.sum()
                 log_likelihood.append(curr_log_likelihood_sum)
                 if verbose:
-                    print 'Iter: %u, log-likelihood: %g' % (i,curr_log_likelihood_sum)
+                    print 'Iter: %u, log-likelihood: %f' % (i,curr_log_likelihood_sum)
 
                 # Check for convergence.
                 if i > 0 and abs(log_likelihood[-1] - log_likelihood[-2]) < \

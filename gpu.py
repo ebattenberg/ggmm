@@ -189,15 +189,14 @@ class TempGPUMem(dict):
         if len(args) == 3:
             N,K,D = args
             key_shape_mapping = {
-                    'posteriors_NxK' :      (N,K), 
-                    'weighted_X_sum_KxD' :  (K,D),
+                    'posteriors_NxK' :      (N,K), # big
+                    'weighted_X_sum_KxD' :  (K,D), # medium
                     'vmax_Nx1' :            (N,1),
                     'logprob_Nx1' :         (N,1),
                     'inv_weights_Kx1' :     (K,1),
-                    'temp_NxD' :            (N,D),
-                    'temp_NxK' :            (N,K),
-                    'temp_KxD' :            (K,D),
-                    'temp_KxD_2' :          (K,D),
+                    'temp_NxD' :            (N,D), # big
+                    'temp_KxD' :            (K,D), # medium
+                    'temp_KxD_2' :          (K,D), # medium
                     'temp_Kx1' :            (K,1),
                     'temp_Kx1_2' :          (K,1),
             }
@@ -221,17 +220,6 @@ class TempGPUMem(dict):
                     self[key].shape,
                     shape))
                 self[key] = cm.empty(shape)
-
-        if 0:
-            # deallocate unneeded memory
-            for key,shape in self.iteritems():
-                if (not key_shape_mapping.has_key(key) 
-                        or shape != key_shape_mapping[key]):
-                    self.pop(key)
-                    logger.debug('%s: removed %s at key %s' % (
-                        sys._getframe().f_code.co_name,
-                        shape,
-                        key))
 
     def dealloc(self):
         self.clear()
@@ -451,15 +439,12 @@ class GMM(object):
         temp_gpu_mem.alloc(N,self.K,self.D)
 
 
-        #maintain_temp_gpu_mem(temp_gpu_mem, N, self.K, self.D)
-
         # lpr = log_multivariate_normal_density() + np.log(self.weights)[None,:]
         # -----------------------------------------------------
         posteriors_NxK = log_multivariate_normal_density(
                 X, self.means, self.covars, 
                 self.covariance_type,temp_gpu_mem)
         # lpr += np.log(self.weights)
-        #temp_Kx1 = temp_gpu_mem['Kx1']
         temp_Kx1 = temp_gpu_mem['temp_Kx1']
         cm.log(self.weights, target=temp_Kx1)
         temp_Kx1.reshape((1,self.K)) # transpose
@@ -471,32 +456,23 @@ class GMM(object):
         #logprob_Nx1 = np.log(np.sum(np.exp(lpr - vmax), axis=1))
         #logprob_Nx1 += vmax
         # ---------------------------------------------------------
-        #vmax = temp_gpu_mem['Nx1']
         vmax_Nx1 = temp_gpu_mem['vmax_Nx1']
-        #logprob_Nx1 = temp_gpu_mem['Nx1(2)']
         logprob_Nx1 = temp_gpu_mem['logprob_Nx1']
         # vmax_Nx1 = np.max(lpr,axis=1)
         posteriors_NxK.max(axis=1, target=vmax_Nx1)
-        #temp_NxK = temp_gpu_mem['NxK(2)']
-        temp_NxK = temp_gpu_mem['temp_NxK']
-        # temp_NxK = lpr - vmax_Nx1[:,None]
-        posteriors_NxK.add_col_mult(vmax_Nx1, -1.0, target=temp_NxK)
-        # temp_NxK = np.exp(temp_NxK)
-        cm.exp(temp_NxK,target=temp_NxK)
-        # logprob_Nx1 = np.sum(temp_NxK, axis=1)
-        temp_NxK.sum(axis=1, target=logprob_Nx1)
+        # lpr -= vmax_Nx1[:,None]
+        posteriors_NxK.add_col_mult(vmax_Nx1, -1.0)
+        # posteriors_NxK = np.exp(posteriors_NxK)
+        cm.exp(posteriors_NxK)
+        # logprob_Nx1 = np.sum(posteriors_NxK, axis=1)
+        posteriors_NxK.sum(axis=1, target=logprob_Nx1)
+        # posteriors_NxK /= logprob_Nx1[:,None]
+        posteriors_NxK.div_by_col(logprob_Nx1)
+
         # logprob_Nx1 = np.log(logprob_Nx1)
         cm.log(logprob_Nx1, target=logprob_Nx1)
         # logprob_Nx1 += vmax_Nx1
         logprob_Nx1.add(vmax_Nx1)
-        # in use: logprob_Nx1 -> 'Nx1(2)'
-
-
-        # posteriors = np.exp(lpr - logprob_Nx1[:, np.newaxis])
-        # ---------------------------------------------------------
-        # lpr = lpr - logprob_Nx1[:,None]
-        posteriors_NxK.add_col_mult(logprob_Nx1, mult=-1.0)
-        cm.exp(posteriors_NxK, target=posteriors_NxK)
 
         return logprob_Nx1, posteriors_NxK
 
@@ -590,7 +566,7 @@ class GMM(object):
 
     def fit(self, X,
             thresh=1e-2, n_iter=100, n_init=1,
-            update_params='wmc', init_params='wmc',
+            update_params='wmc', init_params='',
             random_state=None,verbose=None):
         """Estimate model parameters with the expectation-maximization
         algorithm.
@@ -664,12 +640,15 @@ class GMM(object):
                 curr_log_likelihood, posteriors = self.score_samples(X_gpu,temp_gpu_mem)
                 curr_log_likelihood_sum = curr_log_likelihood.sum(axis=0).asarray()[0,0]
                 log_likelihood.append(curr_log_likelihood_sum)
+                if i > 0:
+                    change = log_likelihood[-1] - log_likelihood[-2]
+                else:
+                    change = np.inf
                 if verbose:
-                    print 'Iter: %u, log-likelihood: %g' % (i,curr_log_likelihood_sum)
+                    print 'Iter: %u, log-likelihood: %g (change = %g)' % (i,curr_log_likelihood_sum, change)
 
                 # Check for convergence.
-                if i > 0 and abs(log_likelihood[-1] - log_likelihood[-2]) < \
-                        thresh:
+                if change < thresh:
                     converged = True
                     break
 
