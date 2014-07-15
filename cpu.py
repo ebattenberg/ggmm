@@ -15,6 +15,7 @@ from scipy import linalg
 EPS = np.finfo(float).eps
 
 def init(*args):
+    '''No-op for API compatibility with ggmm.gpu'''
     pass
 
 
@@ -126,6 +127,7 @@ def pinvh(a, cond=None, rcond=None, lower=True):
     True
 
     """
+
     a = np.asarray_chkfinite(a)
     s, u = linalg.eigh(a, lower=lower)
 
@@ -171,6 +173,7 @@ def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
     X : array, shape (n_features, n_samples)
         Randomly generated sample
     """
+
     rng = check_random_state(random_state)
     n_dim = len(mean)
     rand = rng.randn(n_dim, n_samples)
@@ -267,7 +270,6 @@ class GMM(object):
                 covariance_type='diag',
                 min_covar=1e-3,
                 verbose=False):
-               
 
         self.n_components = n_components
         self.n_dimensions = n_dimensions
@@ -283,33 +285,37 @@ class GMM(object):
         self.means = None
         self.covars = None
 
-    def set_weights(self,weights):
+    def set_weights(self, weights):
         if weights.shape != (self.n_components,):
-            raise ValueError, 'input weight vector is of shape %s, should be %s' % (
-                    weights.shape,(self.n_components,))
+            raise ValueError(
+                    'input weight vector is of shape %s, should be %s'
+                    % (weights.shape, (self.n_components,)))
         if np.abs(weights.sum()-1.0) > 1e-6:
-            raise ValueError, 'input weight vector must sum to 1.0'
+            raise ValueError('input weight vector must sum to 1.0')
         if np.any(weights < 0.0):
-            raise ValueError, 'input weight values must be non-negative'
+            raise ValueError('input weight values must be non-negative')
         self.weights = weights.copy()
 
-    def set_means(self,means):
-        if means.shape != (self.n_components,self.n_dimensions):
-            raise ValueError, 'input mean matrix is of shape %s, should be %s' % (
-                    means.shape,(self.n_components,self.n_dimensions))
+    def set_means(self, means):
+        if means.shape != (self.n_components, self.n_dimensions):
+            raise ValueError(
+                'input mean matrix is of shape %s, should be %s'
+                % (means.shape, (self.n_components, self.n_dimensions)))
         self.means = means.copy()
 
-    def set_covars(self,covars):
-        if covars.shape != (self.n_components,self.n_dimensions):
-            raise ValueError, 'input covars matrix is of shape %s, should be %s' % (
-                    covars.shape,(self.n_components,self.n_dimensions))
+    def set_covars(self, covars):
+        if covars.shape != (self.n_components, self.n_dimensions):
+            raise ValueError(
+                'input covars matrix is of shape %s, should be %s'
+                % (covars.shape, (self.n_components, self.n_dimensions)))
         self.covars = covars.copy()
         if np.any(self.covars < 0):
-            raise ValueError, 'input covars must be non-negative'
+            raise ValueError('input covars must be non-negative')
         if np.any(self.covars < self.min_covar):
             self.covars[self.covars < self.min_covar] = self.min_covar
             if self.verbose:
-                print 'input covars less than min_covar (%g) have been set to %g' % (self.min_covar,self.min_covar)
+                print 'input covars less than min_covar (%g) ' \
+                        'have been set to %g' % (self.min_covar, self.min_covar)
 
     def get_weights(self):
         return self.weights
@@ -342,12 +348,13 @@ class GMM(object):
             Posterior probabilities of each mixture component for each
             observation
         """
-        if None in (self.weights,self.means,self.covars):
-            raise ValueError, 'GMM parameters have not been initialized'
+        if None in (self.weights, self.means, self.covars):
+            raise ValueError('GMM parameters have not been initialized')
 
         if X.shape[1] != self.n_dimensions:
-            raise ValueError, 'input data matrix X is of shape %s, should be %s' % (
-                    X.shape,(X.shape[0],self.n_dimensions))
+            raise ValueError(
+                'input data matrix X is of shape %s, should be %s'
+                % (X.shape, (X.shape[0], self.n_dimensions)))
 
         X = np.asarray(X, dtype=np.float)
         n_observations = X.shape[0]
@@ -450,7 +457,7 @@ class GMM(object):
     def fit(self, X,
             thresh=1e-2, n_iter=100, n_init=1,
             update_params='wmc', init_params='wmc',
-            random_state=None,verbose=None):
+            random_state=None, verbose=None):
         """Estimate model parameters with the expectation-maximization
         algorithm.
 
@@ -477,8 +484,9 @@ class GMM(object):
         if n_init < 1:
             raise ValueError('GMM estimation requires at least one run')
         if X.shape[1] != self.n_dimensions:
-            raise ValueError, 'input data matrix X is of shape %s, should be %s' % (
-                    X.shape,(X.shape[0],self.n_dimensions))
+            raise ValueError(
+                    'input data matrix X is of shape %s, should be %s'
+                    % (X.shape, (X.shape[0], self.n_dimensions)))
 
         X = np.asarray(X, dtype=np.float)
         n_observations = X.shape[0]
@@ -496,14 +504,16 @@ class GMM(object):
                 self.means = X[perm[:self.n_components]].copy()
 
             if 'w' in init_params or self.weights is None:
-                self.weights = (1.0/self.n_components)*np.ones(self.n_components)
+                self.weights = ((1.0/self.n_components)
+                                *np.ones(self.n_components))
 
             if 'c' in init_params or self.covars is None:
                 if self.covariance_type == 'diag':
-                    cv = np.var(X,axis=0) + self.min_covar
-                    self.covars = np.tile(cv, (self.n_components,1))
+                    cv = np.var(X, axis=0) + self.min_covar
+                    self.covars = np.tile(cv, (self.n_components, 1))
                 else:
-                    raise ValueError, 'unsupported covariance type: %s' % self.covariance_type
+                    raise ValueError('unsupported covariance type: %s'
+                                        % self.covariance_type)
 
             # EM algorithms
             log_likelihood = []
@@ -514,7 +524,8 @@ class GMM(object):
                 curr_log_likelihood_sum = curr_log_likelihood.sum()
                 log_likelihood.append(curr_log_likelihood_sum)
                 if verbose:
-                    print 'Iter: %u, log-likelihood: %f' % (i,curr_log_likelihood_sum)
+                    print 'Iter: %u, log-likelihood: %f' % (
+                                i, curr_log_likelihood_sum)
 
                 # Check for convergence.
                 if i > 0 and abs(log_likelihood[-1] - log_likelihood[-2]) < \
@@ -639,6 +650,7 @@ def _log_multivariate_normal_density_spherical(X, means, covars):
 
 def _log_multivariate_normal_density_tied(X, means, covars):
     """Compute Gaussian log-density at X for a tied model"""
+
     n_samples, n_dim = X.shape
     icv = pinvh(covars)
     lpr = -0.5 * (n_dim * np.log(2 * np.pi) + np.log(linalg.det(covars) + 0.1)
@@ -673,7 +685,6 @@ def _log_multivariate_normal_density_full(X, means, covars, min_covar=1.e-7):
 def _validate_covars(covars, covariance_type, n_components):
     """Do basic checks on matrix covariance sizes and values
     """
-    from scipy import linalg
     if covariance_type == 'spherical':
         if len(covars) != n_components:
             raise ValueError("'spherical' covars have length n_components")
