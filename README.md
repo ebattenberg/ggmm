@@ -3,6 +3,12 @@ ggmm
 
 Python module to train GMMs using CUDA (via CUDAMat)
 
+### Contents
+[Dependencies](#dependencies)
+[Installation](#installation)
+[Example usage](#example-usage)
+[Documentation](#documentation)
+
 ###Dependencies
 
 * Not Windows (only tested on Linux and Mac)
@@ -76,3 +82,6 @@ covars = gmm.get_covars()
 # compute posteriors of data
 posteriors = gmm.predict_proba(X)
 ```
+
+### Documentation
+Documentation available [here](http://ebattenberg.github.io/ggmm)
