@@ -243,54 +243,6 @@ class TempGPUMem(dict):
         self.clear()
 
 
-def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
-                    random_state=None):
-    """Generate random samples from a Gaussian distribution.
-
-    Parameters
-    ----------
-    mean : array_like, shape (n_dimensions,)
-        Mean of the distribution.
-
-    covars : array_like, optional
-        Covariance of the distribution. The shape depends on `covariance_type`:
-            scalar if 'spherical',
-            (n_dimensions,) if 'diag',
-            (n_dimensions, n_dimensions)  if 'tied', or 'full'
-
-    covariance_type : string, optional
-        Type of the covariance parameters.  Must be one of
-        'spherical', 'tied', 'diag', 'full'.  Defaults to 'diag'.
-
-    n_samples : int, optional
-        Number of samples to generate. Defaults to 1.
-
-    Returns
-    -------
-    X : array, shape (n_dimensions, n_samples)
-        Randomly generated sample
-    """
-
-    rng = check_random_state(random_state)
-    n_dimensions = len(mean)
-    rand = rng.randn(n_dimensions, n_samples)
-    if n_samples == 1:
-        rand.shape = (n_dimensions,)
-
-    if covariance_type == 'spherical':
-        rand *= np.sqrt(covar)
-    elif covariance_type == 'diag':
-        rand = np.dot(np.diag(np.sqrt(covar)), rand)
-    else:
-        s, U = linalg.eigh(covar)
-        s.clip(0, out=s)        # get rid of tiny negatives
-        np.sqrt(s, out=s)
-        U *= s
-        rand = np.dot(U, rand)
-
-    return (rand.T + mean).T
-
-
 class GMM(object):
     """Gaussian Mixture Model
 
@@ -547,46 +499,6 @@ class GMM(object):
         _, posteriors = self.score_samples(X)
         return posteriors
 
-    def sample(self, n_samples=1, random_state=None):
-        """Generate random samples from the model.
-
-        Parameters
-        ----------
-        n_samples : int, optional
-            Number of samples to generate. Defaults to 1.
-
-        Returns
-        -------
-        X : array_like, shape (n_samples, n_dimensions)
-            List of samples
-        """
-        if random_state is None:
-            random_state = self.random_state
-        random_state = check_random_state(random_state)
-        weight_cdf = np.cumsum(self.weights)
-
-        X = np.empty((n_samples, self.means.shape[1]))
-        rand = random_state.rand(n_samples)
-        # decide which component to use for each sample
-        comps = weight_cdf.searchsorted(rand)
-        # for each component, generate all needed samples
-        for comp in xrange(self.n_components):
-            # occurrences of current component in X
-            comp_in_X = (comp == comps)
-            # number of those occurrences
-            num_comp_in_X = comp_in_X.sum()
-            if num_comp_in_X > 0:
-                if self.covariance_type == 'tied':
-                    cv = self.covars
-                elif self.covariance_type == 'spherical':
-                    cv = self.covars[comp][0]
-                else:
-                    cv = self.covars[comp]
-                X[comp_in_X] = sample_gaussian(
-                    self.means[comp], cv, self.covariance_type,
-                    num_comp_in_X, random_state=random_state).T
-        return X
-
     def fit(self, X,
             thresh=1e-2, n_iter=100, n_init=1,
             update_params='wmc', init_params='',
@@ -793,34 +705,6 @@ class GMM(object):
         mean_params = ndim * self.n_components
         return int(cov_params + mean_params + self.n_components - 1)
 
-    def bic(self, X):
-        """Bayesian information criterion for the current model fit
-        and the proposed data
-
-        Parameters
-        ----------
-        X : array of shape(n_samples, D)
-
-        Returns
-        -------
-        bic: float (the lower the better)
-        """
-        return (-2 * self.score(X).sum() +
-                self._n_parameters() * np.log(X.shape[0]))
-
-    def aic(self, X):
-        """Akaike information criterion for the current model fit
-        and the proposed data
-
-        Parameters
-        ----------
-        X : array of shape(n_samples, D)
-
-        Returns
-        -------
-        aic: float (the lower the better)
-        """
-        return - 2 * self.score(X).sum() + 2 * self._n_parameters()
 
 #########################################################################
 # some helper routines
@@ -883,45 +767,6 @@ def _log_multivariate_normal_density_diag(X, means, covars, temp_gpu_mem):
     return lpr_NxK
 
 
-def _validate_covars(covars, covariance_type, n_components):
-    """Do basic checks on matrix covariance sizes and values
-    """
-    if covariance_type == 'spherical':
-        if len(covars) != n_components:
-            raise ValueError("'spherical' covars have length n_components")
-        elif np.any(covars <= 0):
-            raise ValueError("'spherical' covars must be non-negative")
-    elif covariance_type == 'tied':
-        if covars.shape[0] != covars.shape[1]:
-            raise ValueError(
-                "'tied' covars must have shape (n_dimensions, n_dimensions)")
-        elif (not np.allclose(covars, covars.T)
-              or np.any(linalg.eigvalsh(covars) <= 0)):
-            raise ValueError("'tied' covars must be symmetric, "
-                             "positive-definite")
-    elif covariance_type == 'diag':
-        if len(covars.shape) != 2:
-            raise ValueError("'diag' covars must have shape "
-                             "(n_components, n_dimensions)")
-        elif np.any(covars <= 0):
-            raise ValueError("'diag' covars must be non-negative")
-    elif covariance_type == 'full':
-        if len(covars.shape) != 3:
-            raise ValueError("'full' covars must have shape "
-                             "(n_components, n_dimensions, n_dimensions)")
-        elif covars.shape[1] != covars.shape[2]:
-            raise ValueError("'full' covars must have shape "
-                             "(n_components, n_dimensions, n_dimensions)")
-        for n, cv in enumerate(covars):
-            if (not np.allclose(cv, cv.T)
-                    or np.any(linalg.eigvalsh(cv) <= 0)):
-                raise ValueError("component %d of 'full' covars must be "
-                                 "symmetric, positive-definite" % n)
-    else:
-        raise ValueError("covariance_type must be one of " +
-                         "'spherical', 'tied', 'diag', 'full'")
-
-
 def _covar_mstep_diag(gmm, X, posteriors, weighted_X_sum, inv_weights,
                       min_covar, temp_gpu_mem):
     """Performing the covariance M step for diagonal cases"""
@@ -954,41 +799,6 @@ def _covar_mstep_diag(gmm, X, posteriors, weighted_X_sum, inv_weights,
     # return avg_X2 - 2 * avg_X_means + avg_means2 + min_covar
     # [KxD] - 2*[KxD] + [KxD] + [1]
     return avg_X2
-
-
-def _covar_mstep_spherical(*args):
-    """Performing the covariance M step for spherical cases"""
-    raise NotImplementedError
-    cv = _covar_mstep_diag(*args)
-    return np.tile(cv.mean(axis=1)[:, np.newaxis], (1, cv.shape[1]))
-
-
-def _covar_mstep_full(gmm, X, posteriors, weighted_X_sum, norm,
-                      min_covar):
-    """Performing the covariance M step for full cases"""
-    # Eq. 12 from K. Murphy, "Fitting a Conditional Linear Gaussian
-    # Distribution"
-    n_dimensions = X.shape[1]
-    cv = np.empty((gmm.n_components, n_dimensions, n_dimensions))
-    for c in xrange(gmm.n_components):
-        post = posteriors[:, c]
-        # Underflow Errors in doing post * X.T are  not important
-        np.seterr(under='ignore')
-        avg_cv = np.dot(post * X.T, X) / (post.sum() + 10 * EPS)
-        mu = gmm.means[c][np.newaxis]
-        cv[c] = (avg_cv - np.dot(mu.T, mu) + min_covar * np.eye(n_dimensions))
-    return cv
-
-
-def _covar_mstep_tied(gmm, X, posteriors, weighted_X_sum, norm,
-                      min_covar):
-
-    raise NotImplementedError
-    # Eq. 15 from K. Murphy, "Fitting a Conditional Linear Gaussian
-    n_dimensions = X.shape[1]
-    avg_X2 = np.dot(X.T, X)
-    avg_means2 = np.dot(gmm.means_.T, weighted_X_sum)
-    return (avg_X2 - avg_means2 + min_covar * np.eye(n_dimensions)) / X.shape[0]
 
 
 _covar_mstep_funcs = {
