@@ -14,7 +14,13 @@ from scipy import linalg
 
 EPS = np.finfo(float).eps
 
+
 def init(*args):
+    '''No-op for API compatibility with ggmm.gpu'''
+    pass
+
+
+def shutdown():
     '''No-op for API compatibility with ggmm.gpu'''
     pass
 
@@ -55,6 +61,7 @@ def log_multivariate_normal_density(X, means, covars, covariance_type='diag'):
     return log_multivariate_normal_density_dict[covariance_type](
         X, means, covars)
 
+
 def logsumexp(arr, axis=0):
     """Computes the sum of arr assuming arr is in the log domain.
 
@@ -68,6 +75,7 @@ def logsumexp(arr, axis=0):
     out = np.log(np.sum(np.exp(arr - vmax), axis=0))
     out += vmax
     return out
+
 
 def check_random_state(seed):
     """Turn seed into a np.random.RandomState instance
@@ -85,6 +93,7 @@ def check_random_state(seed):
         return seed
     raise ValueError('%r cannot be used to seed a numpy.random.RandomState'
                      ' instance' % seed)
+
 
 def pinvh(a, cond=None, rcond=None, lower=True):
     """Compute the (Moore-Penrose) pseudo-inverse of a hermetian matrix.
@@ -195,6 +204,7 @@ def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
 
 
 class GMM(object):
+
     """Gaussian Mixture Model
 
     Representation of a Gaussian mixture model probability distribution.
@@ -267,9 +277,9 @@ class GMM(object):
     """
 
     def __init__(self, n_components, n_dimensions,
-                covariance_type='diag',
-                min_covar=1e-3,
-                verbose=False):
+                 covariance_type='diag',
+                 min_covar=1e-3,
+                 verbose=False):
 
         self.n_components = n_components
         self.n_dimensions = n_dimensions
@@ -277,7 +287,7 @@ class GMM(object):
         self.min_covar = min_covar
         self.verbose = verbose
 
-        if not covariance_type in ['diag']:
+        if covariance_type not in ['diag']:
             raise ValueError('Invalid value for covariance_type: %s' %
                              covariance_type)
 
@@ -288,8 +298,8 @@ class GMM(object):
     def set_weights(self, weights):
         if weights.shape != (self.n_components,):
             raise ValueError(
-                    'input weight vector is of shape %s, should be %s'
-                    % (weights.shape, (self.n_components,)))
+                'input weight vector is of shape %s, should be %s'
+                % (weights.shape, (self.n_components,)))
         if np.abs(weights.sum()-1.0) > 1e-6:
             raise ValueError('input weight vector must sum to 1.0')
         if np.any(weights < 0.0):
@@ -315,7 +325,7 @@ class GMM(object):
             self.covars[self.covars < self.min_covar] = self.min_covar
             if self.verbose:
                 print 'input covars less than min_covar (%g) ' \
-                        'have been set to %g' % (self.min_covar, self.min_covar)
+                    'have been set to %g' % (self.min_covar, self.min_covar)
 
     def get_weights(self):
         return self.weights
@@ -357,7 +367,6 @@ class GMM(object):
                 % (X.shape, (X.shape[0], self.n_dimensions)))
 
         X = np.asarray(X, dtype=np.float)
-        n_observations = X.shape[0]
 
         lpr = (log_multivariate_normal_density(X, self.means, self.covars,
                                                self.covariance_type)
@@ -485,8 +494,8 @@ class GMM(object):
             raise ValueError('GMM estimation requires at least one run')
         if X.shape[1] != self.n_dimensions:
             raise ValueError(
-                    'input data matrix X is of shape %s, should be %s'
-                    % (X.shape, (X.shape[0], self.n_dimensions)))
+                'input data matrix X is of shape %s, should be %s'
+                % (X.shape, (X.shape[0], self.n_dimensions)))
 
         X = np.asarray(X, dtype=np.float)
         n_observations = X.shape[0]
@@ -505,7 +514,7 @@ class GMM(object):
 
             if 'w' in init_params or self.weights is None:
                 self.weights = ((1.0/self.n_components)
-                                *np.ones(self.n_components))
+                                * np.ones(self.n_components))
 
             if 'c' in init_params or self.covars is None:
                 if self.covariance_type == 'diag':
@@ -513,7 +522,7 @@ class GMM(object):
                     self.covars = np.tile(cv, (self.n_components, 1))
                 else:
                     raise ValueError('unsupported covariance type: %s'
-                                        % self.covariance_type)
+                                     % self.covariance_type)
 
             # EM algorithms
             log_likelihood = []
@@ -525,7 +534,7 @@ class GMM(object):
                 log_likelihood.append(curr_log_likelihood_sum)
                 if verbose:
                     print 'Iter: %u, log-likelihood: %f' % (
-                                i, curr_log_likelihood_sum)
+                        i, curr_log_likelihood_sum)
 
                 # Check for convergence.
                 if i > 0 and abs(log_likelihood[-1] - log_likelihood[-2]) < \
@@ -565,7 +574,6 @@ class GMM(object):
         weights = responsibilities.sum(axis=0)
         weighted_X_sum = np.dot(responsibilities.T, X)
         inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
-
 
         if 'w' in update_params:
             self.weights = (weights / (weights.sum() + 10 * EPS) + EPS)
@@ -624,7 +632,7 @@ class GMM(object):
 
 
 #########################################################################
-## some helper routines
+# some helper routines
 #########################################################################
 
 
@@ -745,7 +753,6 @@ def _covar_mstep_diag(gmm, X, responsibilities, weighted_X_sum, norm,
     avg_X2 = np.dot(responsibilities.T, X * X) * norm
     avg_means2 = gmm.means ** 2
     avg_X_means = gmm.means * weighted_X_sum * norm
-    #import pdb; pdb.set_trace()
     return avg_X2 - 2 * avg_X_means + avg_means2 + min_covar
 
 
