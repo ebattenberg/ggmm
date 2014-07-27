@@ -38,7 +38,7 @@ Training a GMM::
     posteriors = gmm.compute_posteriors(X)
 
 
-Documentation
+Reference
 ================
 
 .. autoclass:: ggmm.gpu.GMM

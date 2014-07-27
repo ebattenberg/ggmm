@@ -4,7 +4,7 @@ CPU/Numpy Backend
 
 .. automodule:: ggmm.cpu
 
-Documentation
+Reference
 ===============
 
 .. autoclass:: ggmm.cpu.GMM
