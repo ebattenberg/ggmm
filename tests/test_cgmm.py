@@ -1,7 +1,7 @@
 from nose.tools import *
 import numpy as np
 
-import cgmm
+import ggmm.cpu as cgmm
 
 # ------------------------------------------
 # covariance types
