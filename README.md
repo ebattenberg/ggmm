@@ -5,11 +5,11 @@ Python module to train GMMs using CUDA (via CUDAMat)
 
 ###Dependencies
 
-* Not Windows (not tested)
+* Not Windows (only tested on Linux and Mac)
 * CUDA 6.0+ (only tested with 6.0)
 * numpy
 * my fork of CUDAMat avaiable here: https://github.com/ebattenberg/cudamat
-* nose (for running tests)
+* nose (optional, for running tests)
 
 ###Installation
 
