@@ -80,7 +80,7 @@ means = gmm.get_means()
 covars = gmm.get_covars()
 
 # compute posteriors of data
-posteriors = gmm.predict_proba(X)
+posteriors = gmm.compute_posteriors(X)
 ```
 
 ### Documentation
