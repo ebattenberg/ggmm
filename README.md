@@ -63,9 +63,10 @@ gmm = ggmm.GMM(K,D)
 
 thresh = 1e-3 # convergence threshold
 n_iter = 20 # maximum number of EM iterations
+init_params = 'wmc' # initialize weights, means, and covariances
 
 # train GMM
-gmm.fit(X, thresh, n_iter)
+gmm.fit(X, thresh, n_iter, init_params=init_params)
 
 # retrieve parameters from trained GMM
 weights = gmm.get_weights()
