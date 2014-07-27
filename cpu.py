@@ -1,8 +1,5 @@
 """
-Gaussian Mixture Models.
-
-This implementation corresponds to frequentist (non-Bayesian) formulation
-of Gaussian Mixture Models.
+CPU/Numpy backend for GMM training and inference
 """
 
 # Author: Eric Battenberg <ebattenberg@gmail.com>
@@ -30,19 +27,19 @@ def log_multivariate_normal_density(X, means, covars, covariance_type='diag'):
 
     Parameters
     ----------
-    X : array_like, shape (n_samples, n_features)
-        List of n_features-dimensional data points.  Each row corresponds to a
+    X : array_like, shape (n_samples, n_dimensions)
+        List of 'n_samples' data points.  Each row corresponds to a
         single data point.
-    means : array_like, shape (n_components, n_features)
-        List of n_features-dimensional mean vectors for n_components Gaussians.
+    means : array_like, shape (n_components, n_dimensions)
+        List of 'n_components' mean vectors for n_components Gaussians.
         Each row corresponds to a single mean vector.
     covars : array_like
         List of n_components covariance parameters for each Gaussian. The shape
         depends on `covariance_type`:
-            (n_components, n_features)      if 'spherical',
-            (n_features, n_features)    if 'tied',
-            (n_components, n_features)    if 'diag',
-            (n_components, n_features, n_features) if 'full'
+            (n_components, n_dimensions)      if 'spherical',
+            (n_dimensions, n_dimensions)    if 'tied',
+            (n_components, n_dimensions)    if 'diag',
+            (n_components, n_dimensions, n_dimensions) if 'full'
     covariance_type : string
         Type of the covariance parameters.  Must be one of
         'spherical', 'tied', 'diag', 'full'.  Defaults to 'diag'.
@@ -57,7 +54,8 @@ def log_multivariate_normal_density(X, means, covars, covariance_type='diag'):
         'spherical': _log_multivariate_normal_density_spherical,
         'tied': _log_multivariate_normal_density_tied,
         'diag': _log_multivariate_normal_density_diag,
-        'full': _log_multivariate_normal_density_full}
+        'full': _log_multivariate_normal_density_full
+    }
     return log_multivariate_normal_density_dict[covariance_type](
         X, means, covars)
 
@@ -136,7 +134,6 @@ def pinvh(a, cond=None, rcond=None, lower=True):
     True
 
     """
-
     a = np.asarray_chkfinite(a)
     s, u = linalg.eigh(a, lower=lower)
 
@@ -161,14 +158,14 @@ def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
 
     Parameters
     ----------
-    mean : array_like, shape (n_features,)
+    mean : array_like, shape (n_dimensions,)
         Mean of the distribution.
 
     covars : array_like, optional
         Covariance of the distribution. The shape depends on `covariance_type`:
             scalar if 'spherical',
-            (n_features) if 'diag',
-            (n_features, n_features)  if 'tied', or 'full'
+            (n_dimensions,) if 'diag',
+            (n_dimensions, n_dimensions)  if 'tied', or 'full'
 
     covariance_type : string, optional
         Type of the covariance parameters.  Must be one of
@@ -179,15 +176,15 @@ def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
 
     Returns
     -------
-    X : array, shape (n_features, n_samples)
+    X : array, shape (n_dimensions, n_samples)
         Randomly generated sample
     """
 
     rng = check_random_state(random_state)
-    n_dim = len(mean)
-    rand = rng.randn(n_dim, n_samples)
+    n_dimensions = len(mean)
+    rand = rng.randn(n_dimensions, n_samples)
     if n_samples == 1:
-        rand.shape = (n_dim,)
+        rand.shape = (n_dimensions,)
 
     if covariance_type == 'spherical':
         rand *= np.sqrt(covar)
@@ -224,7 +221,7 @@ class GMM(object):
 
     covariance_type : string, optional
         String describing the type of covariance parameters to
-        use.  For now, only 'diag' is supported.
+        use.  Must be one of 'spherical', 'tied', 'diag', 'full'.
         Defaults to 'diag'.
 
     min_covar : float, optional
@@ -340,7 +337,7 @@ class GMM(object):
         """Return the per-sample likelihood of the data under the model.
 
         Compute the log probability of X under the model and
-        return the posterior distribution (responsibilities) of each
+        return the posterior probability of each
         mixture component for each element of X.
 
         Parameters
@@ -354,7 +351,7 @@ class GMM(object):
         logprob : array_like, shape (n_samples,)
             Log probabilities of each data point in X.
 
-        responsibilities : array_like, shape (n_samples, n_components)
+        posteriors : array_like, shape (n_samples, n_components)
             Posterior probabilities of each mixture component for each
             sample
         """
@@ -380,8 +377,8 @@ class GMM(object):
 
         Parameters
         ----------
-        X : array_like, shape (n_samples, n_features)
-            List of n_features-dimensional data points.  Each row
+        X : array_like, shape (n_samples, n_dimensions)
+            List of 'n_samples' data points.  Each row
             corresponds to a single data point.
 
         Returns
@@ -397,14 +394,14 @@ class GMM(object):
 
         Parameters
         ----------
-        X : array-like, shape = [n_samples, n_features]
+        X : array-like, shape = [n_samples, n_dimensions]
 
         Returns
         -------
         C : array, shape = (n_samples,)
         """
-        logprob, responsibilities = self.score_samples(X)
-        return responsibilities.argmax(axis=1)
+        _, posteriors = self.score_samples(X)
+        return posteriors.argmax(axis=1)
 
     def compute_posteriors(self, X):
         """Predict posterior probability of data under each Gaussian
@@ -412,16 +409,16 @@ class GMM(object):
 
         Parameters
         ----------
-        X : array-like, shape = [n_samples, n_features]
+        X : array-like, shape = [n_samples, n_dimensions]
 
         Returns
         -------
-        responsibilities : array-like, shape = (n_samples, n_components)
+        posteriors : array-like, shape = (n_samples, K)
             Returns the probability of the sample for each Gaussian
             (state) in the model.
         """
-        logprob, responsibilities = self.score_samples(X)
-        return responsibilities
+        _, posteriors = self.score_samples(X)
+        return posteriors
 
     def sample(self, n_samples=1, random_state=None):
         """Generate random samples from the model.
@@ -433,7 +430,7 @@ class GMM(object):
 
         Returns
         -------
-        X : array_like, shape (n_samples, n_features)
+        X : array_like, shape (n_samples, n_dimensions)
             List of samples
         """
         if random_state is None:
@@ -465,7 +462,7 @@ class GMM(object):
 
     def fit(self, X,
             thresh=1e-2, n_iter=100, n_init=1,
-            update_params='wmc', init_params='wmc',
+            update_params='wmc', init_params='',
             random_state=None, verbose=None):
         """Estimate model parameters with the expectation-maximization
         algorithm.
@@ -478,8 +475,8 @@ class GMM(object):
 
         Parameters
         ----------
-        X : array_like, shape (n, n_features)
-            List of n_features-dimensional data points.  Each row
+        X : array_like, shape (n_samples, n_dimensions)
+            List of 'n_samples' data points.  Each row
             corresponds to a single data point.
         thresh : float, optional
             Convergence threshold.
@@ -519,7 +516,7 @@ class GMM(object):
                 % (X.shape, (X.shape[0], self.n_dimensions)))
 
         X = np.asarray(X, dtype=np.float)
-        n_observations = X.shape[0]
+        n_samples = X.shape[0]
 
         if X.shape[0] < self.n_components:
             raise ValueError(
@@ -530,7 +527,7 @@ class GMM(object):
 
         for _ in xrange(n_init):
             if 'm' in init_params or self.means is None:
-                perm = random_state.permutation(n_observations)
+                perm = random_state.permutation(n_samples)
                 self.means = X[perm[:self.n_components]].copy()
 
             if 'w' in init_params or self.weights is None:
@@ -659,8 +656,8 @@ class GMM(object):
 
 def _log_multivariate_normal_density_diag(X, means, covars):
     """Compute Gaussian log-density at X for a diagonal model"""
-    n_samples, n_dim = X.shape
-    lpr = -0.5 * (n_dim * np.log(2 * np.pi) + np.sum(np.log(covars), 1)
+    n_samples, n_dimensions = X.shape
+    lpr = -0.5 * (n_dimensions * np.log(2 * np.pi) + np.sum(np.log(covars), 1)
                   + np.sum((means ** 2) / covars, 1)
                   - 2 * np.dot(X, (means / covars).T)
                   + np.dot(X ** 2, (1.0 / covars).T))
@@ -680,9 +677,10 @@ def _log_multivariate_normal_density_spherical(X, means, covars):
 def _log_multivariate_normal_density_tied(X, means, covars):
     """Compute Gaussian log-density at X for a tied model"""
 
-    n_samples, n_dim = X.shape
+    n_samples, n_dimensions = X.shape
     icv = pinvh(covars)
-    lpr = -0.5 * (n_dim * np.log(2 * np.pi) + np.log(linalg.det(covars) + 0.1)
+    lpr = -0.5 * (n_dimensions * np.log(2 * np.pi)
+                  + np.log(linalg.det(covars) + 0.1)
                   + np.sum(X * np.dot(X, icv), 1)[:, np.newaxis]
                   - 2 * np.dot(np.dot(X, icv), means.T)
                   + np.sum(means * np.dot(means, icv), 1))
@@ -692,7 +690,7 @@ def _log_multivariate_normal_density_tied(X, means, covars):
 def _log_multivariate_normal_density_full(X, means, covars, min_covar=1.e-7):
     """Log probability for full covariance matrices.
     """
-    n_samples, n_dim = X.shape
+    n_samples, n_dimensions = X.shape
     nmix = len(means)
     log_prob = np.empty((n_samples, nmix))
     for c, (mu, cv) in enumerate(zip(means, covars)):
@@ -701,12 +699,12 @@ def _log_multivariate_normal_density_full(X, means, covars, min_covar=1.e-7):
         except linalg.LinAlgError:
             # The model is most probably stuck in a component with too
             # few observations, we need to reinitialize this components
-            cv_chol = linalg.cholesky(cv + min_covar * np.eye(n_dim),
+            cv_chol = linalg.cholesky(cv + min_covar * np.eye(n_dimensions),
                                       lower=True)
         cv_log_det = 2 * np.sum(np.log(np.diagonal(cv_chol)))
         cv_sol = linalg.solve_triangular(cv_chol, (X - mu).T, lower=True).T
         log_prob[:, c] = - .5 * (np.sum(cv_sol ** 2, axis=1) +
-                                 n_dim * np.log(2 * np.pi) + cv_log_det)
+                                 n_dimensions * np.log(2 * np.pi) + cv_log_det)
 
     return log_prob
 
@@ -721,7 +719,8 @@ def _validate_covars(covars, covariance_type, n_components):
             raise ValueError("'spherical' covars must be non-negative")
     elif covariance_type == 'tied':
         if covars.shape[0] != covars.shape[1]:
-            raise ValueError("'tied' covars must have shape (n_dim, n_dim)")
+            raise ValueError(
+                "'tied' covars must have shape (n_dimensions, n_dimensions)")
         elif (not np.allclose(covars, covars.T)
               or np.any(linalg.eigvalsh(covars) <= 0)):
             raise ValueError("'tied' covars must be symmetric, "
@@ -729,16 +728,16 @@ def _validate_covars(covars, covariance_type, n_components):
     elif covariance_type == 'diag':
         if len(covars.shape) != 2:
             raise ValueError("'diag' covars must have shape "
-                             "(n_components, n_dim)")
+                             "(n_components, n_dimensions)")
         elif np.any(covars <= 0):
             raise ValueError("'diag' covars must be non-negative")
     elif covariance_type == 'full':
         if len(covars.shape) != 3:
             raise ValueError("'full' covars must have shape "
-                             "(n_components, n_dim, n_dim)")
+                             "(n_components, n_dimensions, n_dimensions)")
         elif covars.shape[1] != covars.shape[2]:
             raise ValueError("'full' covars must have shape "
-                             "(n_components, n_dim, n_dim)")
+                             "(n_components, n_dimensions, n_dimensions)")
         for n, cv in enumerate(covars):
             if (not np.allclose(cv, cv.T)
                     or np.any(linalg.eigvalsh(cv) <= 0)):
@@ -783,34 +782,35 @@ def _covar_mstep_spherical(*args):
     return np.tile(cv.mean(axis=1)[:, np.newaxis], (1, cv.shape[1]))
 
 
-def _covar_mstep_full(gmm, X, responsibilities, weighted_X_sum, norm,
+def _covar_mstep_full(gmm, X, posteriors, weighted_X_sum, norm,
                       min_covar):
     """Performing the covariance M step for full cases"""
     # Eq. 12 from K. Murphy, "Fitting a Conditional Linear Gaussian
     # Distribution"
-    n_features = X.shape[1]
-    cv = np.empty((gmm.n_components, n_features, n_features))
+    n_dimensions = X.shape[1]
+    cv = np.empty((gmm.n_components, n_dimensions, n_dimensions))
     for c in xrange(gmm.n_components):
-        post = responsibilities[:, c]
+        post = posteriors[:, c]
         # Underflow Errors in doing post * X.T are  not important
         np.seterr(under='ignore')
         avg_cv = np.dot(post * X.T, X) / (post.sum() + 10 * EPS)
         mu = gmm.means[c][np.newaxis]
-        cv[c] = (avg_cv - np.dot(mu.T, mu) + min_covar * np.eye(n_features))
+        cv[c] = (avg_cv - np.dot(mu.T, mu) + min_covar * np.eye(n_dimensions))
     return cv
 
 
-def _covar_mstep_tied(gmm, X, responsibilities, weighted_X_sum, norm,
+def _covar_mstep_tied(gmm, X, posteriors, weighted_X_sum, norm,
                       min_covar):
     # Eq. 15 from K. Murphy, "Fitting a Conditional Linear Gaussian
-    n_features = X.shape[1]
+    n_dimensions = X.shape[1]
     avg_X2 = np.dot(X.T, X)
     avg_means2 = np.dot(gmm.means.T, weighted_X_sum)
-    return (avg_X2 - avg_means2 + min_covar * np.eye(n_features)) / X.shape[0]
+    return (avg_X2 - avg_means2 + min_covar * np.eye(n_dimensions)) / X.shape[0]
 
 
-_covar_mstep_funcs = {'spherical': _covar_mstep_spherical,
-                      'diag': _covar_mstep_diag,
-                      'tied': _covar_mstep_tied,
-                      'full': _covar_mstep_full,
-                      }
+_covar_mstep_funcs = {
+    'spherical': _covar_mstep_spherical,
+    'diag': _covar_mstep_diag,
+    'tied': _covar_mstep_tied,
+    'full': _covar_mstep_full,
+}
