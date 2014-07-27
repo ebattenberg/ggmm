@@ -3,7 +3,7 @@ ggmm
 
 Python module to train GMMs using CUDA (via CUDAMat)
 
-####Dependencies
+###Dependencies
 
 * Not Windows (not tested)
 * CUDA 6.0+ (only tested with 6.0)
@@ -11,7 +11,7 @@ Python module to train GMMs using CUDA (via CUDAMat)
 * my fork of CUDAMat avaiable here: https://github.com/ebattenberg/cudamat
 * nose (for running tests)
 
-####Installation
+###Installation
 
 Clone ggmm and CUDAMat fork in local install path:
 ```bash
@@ -45,7 +45,7 @@ cd ${INSTALL_PATH}/ggmm
 nosetests
 ```
 
-####Example Usage
+###Example Usage
 
 ```python
 import ggmm.gpu as ggmm
@@ -61,12 +61,17 @@ K = 128
 ggmm.init()
 gmm = ggmm.GMM(K,D)
 
-thresh = 1e-3
-n_iter = 20
+thresh = 1e-3 # convergence threshold
+n_iter = 20 # maximum number of EM iterations
 
+# train GMM
 gmm.fit(X, thresh, n_iter)
 
+# retrieve parameters from trained GMM
 weights = gmm.get_weights()
 means = gmm.get_means()
 covars = gmm.get_covars()
+
+# compute posteriors of data
+posteriors = gmm.predict_proba(X)
 ```
