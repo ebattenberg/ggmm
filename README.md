@@ -5,11 +5,11 @@ Python module to train GMMs using CUDA (via CUDAMat)
 
 ###Dependencies
 
-* Not Windows (not tested)
+* Not Windows (only tested on Linux and Mac)
 * CUDA 6.0+ (only tested with 6.0)
 * numpy
 * my fork of CUDAMat avaiable here: https://github.com/ebattenberg/cudamat
-* nose (for running tests)
+* nose (optional, for running tests)
 
 ###Installation
 
@@ -34,7 +34,7 @@ Compile CUDAMat:
 cd ${INSTALL_PATH}/cudamat
 make
 ```
-Run CUDAMat tests:
+Run CUDAMat tests (requires nose):
 ```
 cd ${INSTALL_PATH}/cudamat
 nosetests
@@ -63,9 +63,10 @@ gmm = ggmm.GMM(K,D)
 
 thresh = 1e-3 # convergence threshold
 n_iter = 20 # maximum number of EM iterations
+init_params = 'wmc' # initialize weights, means, and covariances
 
 # train GMM
-gmm.fit(X, thresh, n_iter)
+gmm.fit(X, thresh, n_iter, init_params=init_params)
 
 # retrieve parameters from trained GMM
 weights = gmm.get_weights()
