@@ -1,0 +1,465 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>CPU/Numpy Backend &mdash; ggmm 0.1a1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1a1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="ggmm 0.1a1 documentation" href="index.html" />
+    <link rel="prev" title="GPU/CUDAMat Backend" href="gpu.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="np-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gpu.html" title="GPU/CUDAMat Backend"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">ggmm 0.1a1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-ggmm.cpu">
+<span id="cpu-numpy-backend"></span><h1>CPU/Numpy Backend<a class="headerlink" href="#module-ggmm.cpu" title="Permalink to this headline">¶</a></h1>
+<p>CPU/Numpy backend for GMM training and inference</p>
+<div class="section" id="documentation">
+<h2>Documentation<a class="headerlink" href="#documentation" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="ggmm.cpu.GMM">
+<em class="property">class </em><tt class="descclassname">ggmm.cpu.</tt><tt class="descname">GMM</tt><big>(</big><em>n_components</em>, <em>n_dimensions</em>, <em>covariance_type='diag'</em>, <em>min_covar=0.001</em>, <em>verbose=False</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gaussian Mixture Model</p>
+<p>Representation of a Gaussian mixture model probability distribution.
+This class allows for easy evaluation of, sampling from, and
+maximum-likelihood estimation of the parameters of a GMM distribution.</p>
+<p>Initializes parameters such that every mixture component has zero
+mean and identity covariance.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>n_components</strong> : int, required</p>
+<blockquote>
+<div><p>Number of mixture components.</p>
+</div></blockquote>
+<p><strong>n_dimensions</strong> : int, required</p>
+<blockquote>
+<div><p>Number of data dimensions.</p>
+</div></blockquote>
+<p><strong>covariance_type</strong> : string, optional</p>
+<blockquote>
+<div><p>String describing the type of covariance parameters to
+use.  Must be one of &#8216;spherical&#8217;, &#8216;tied&#8217;, &#8216;diag&#8217;, &#8216;full&#8217;.
+Defaults to &#8216;diag&#8217;.</p>
+</div></blockquote>
+<p><strong>min_covar</strong> : float, optional</p>
+<blockquote class="last">
+<div><p>Floor on the diagonal of the covariance matrix to prevent
+overfitting.  Defaults to 1e-3.</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Methods</p>
+<dl class="method">
+<dt id="ggmm.cpu.GMM.aic">
+<tt class="descname">aic</tt><big>(</big><em>X</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.aic" title="Permalink to this definition">¶</a></dt>
+<dd><p>Akaike information criterion for the current model fit
+and the proposed data</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>X</strong> : array of shape(n_samples, n_dimensions)</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><strong>aic: float (the lower the better)</strong> :</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.bic">
+<tt class="descname">bic</tt><big>(</big><em>X</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.bic" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bayesian information criterion for the current model fit
+and the proposed data</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>X</strong> : array of shape(n_samples, n_dimensions)</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><strong>bic: float (the lower the better)</strong> :</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.compute_posteriors">
+<tt class="descname">compute_posteriors</tt><big>(</big><em>X</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.compute_posteriors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Predict posterior probability of data under each Gaussian
+in the model.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>X</strong> : array-like, shape = [n_samples, n_dimensions]</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first"><strong>posteriors</strong> : array-like, shape = (n_samples, K)</p>
+<blockquote class="last">
+<div><p>Returns the probability of the sample for each Gaussian
+(state) in the model.</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.fit">
+<tt class="descname">fit</tt><big>(</big><em>X</em>, <em>thresh=0.01</em>, <em>n_iter=100</em>, <em>n_init=1</em>, <em>update_params='wmc'</em>, <em>init_params=''</em>, <em>random_state=None</em>, <em>verbose=None</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Estimate model parameters with the expectation-maximization
+algorithm.</p>
+<p>A initialization step is performed before entering the em
+algorithm. If you want to avoid this step, set the keyword
+argument init_params to the empty string &#8216;&#8217; when creating the
+GMM object. Likewise, if you would like just to do an
+initialization, set n_iter=0.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>X</strong> : array_like, shape (n_samples, n_dimensions)</p>
+<blockquote>
+<div><p>List of &#8216;n_samples&#8217; data points.  Each row
+corresponds to a single data point.</p>
+</div></blockquote>
+<p><strong>thresh</strong> : float, optional</p>
+<blockquote>
+<div><p>Convergence threshold.</p>
+</div></blockquote>
+<p><strong>n_iter</strong> : int, optional</p>
+<blockquote>
+<div><p>Number of EM iterations to perform.</p>
+</div></blockquote>
+<p><strong>n_init</strong> : int, optional</p>
+<blockquote>
+<div><p>Number of initializations to perform. the best results is kept</p>
+</div></blockquote>
+<p><strong>update_params</strong> : string, optional</p>
+<blockquote>
+<div><p>Controls which parameters are updated in the training
+process.  Can contain any combination of &#8216;w&#8217; for weights,
+&#8216;m&#8217; for means, and &#8216;c&#8217; for covars.  Defaults to &#8216;wmc&#8217;.</p>
+</div></blockquote>
+<p><strong>init_params</strong> : string, optional</p>
+<blockquote>
+<div><p>Controls which parameters are updated in the initialization
+process.  Can contain any combination of &#8216;w&#8217; for weights,
+&#8216;m&#8217; for means, and &#8216;c&#8217; for covars.  Defaults to &#8216;wmc&#8217;.</p>
+</div></blockquote>
+<p><strong>random_state: numpy.random.RandomState</strong> :</p>
+<p><strong>verbose: bool, optional</strong> :</p>
+<blockquote class="last">
+<div><p>Whether to print EM iteration information during training</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.get_covars">
+<tt class="descname">get_covars</tt><big>(</big><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.get_covars" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return current means as numpy array</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first"><strong>covars</strong> : np.ndarray, shape (n_components, n_dimensions)</p>
+<blockquote class="last">
+<div><p>(for now only diagonal covariance matrices are supported)</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.get_means">
+<tt class="descname">get_means</tt><big>(</big><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.get_means" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return current means as numpy array</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><strong>means</strong> : np.ndarray, shape (n_components, n_dimensions)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.get_weights">
+<tt class="descname">get_weights</tt><big>(</big><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.get_weights" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return current weight vector as numpy array</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><strong>weights</strong> : np.ndarray, shape (n_components,)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.predict">
+<tt class="descname">predict</tt><big>(</big><em>X</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Predict label for data.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>X</strong> : array-like, shape = [n_samples, n_dimensions]</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><strong>C</strong> : array, shape = (n_samples,)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.sample">
+<tt class="descname">sample</tt><big>(</big><em>n_samples=1</em>, <em>random_state=None</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.sample" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate random samples from the model.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>n_samples</strong> : int, optional</p>
+<blockquote>
+<div><p>Number of samples to generate. Defaults to 1.</p>
+</div></blockquote>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first"><strong>X</strong> : array_like, shape (n_samples, n_dimensions)</p>
+<blockquote class="last">
+<div><p>List of samples</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.score">
+<tt class="descname">score</tt><big>(</big><em>X</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.score" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the log probability under the model.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>X</strong> : array_like, shape (n_samples, n_dimensions)</p>
+<blockquote>
+<div><p>List of &#8216;n_samples&#8217; data points.  Each row
+corresponds to a single data point.</p>
+</div></blockquote>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first"><strong>logprob</strong> : array_like, shape (n_samples,)</p>
+<blockquote class="last">
+<div><p>Log probabilities of each data point in X</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.score_samples">
+<tt class="descname">score_samples</tt><big>(</big><em>X</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.score_samples" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the per-sample likelihood of the data under the model.</p>
+<p>Compute the log probability of X under the model and
+return the posterior probability of each
+mixture component for each element of X.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>X: numpy.ndarray, shape (n_samples, n_dimensions)</strong> :</p>
+<blockquote>
+<div><p>Array of n_samples data points. Each row
+corresponds to a single data point.</p>
+</div></blockquote>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first"><strong>logprob</strong> : array_like, shape (n_samples,)</p>
+<blockquote>
+<div><p>Log probabilities of each data point in X.</p>
+</div></blockquote>
+<p><strong>posteriors</strong> : array_like, shape (n_samples, n_components)</p>
+<blockquote class="last">
+<div><p>Posterior probabilities of each mixture component for each
+sample</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.set_covars">
+<tt class="descname">set_covars</tt><big>(</big><em>covars</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.set_covars" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set covariance matrices with numpy array</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><p class="first"><strong>covars: numpy.ndarray, shape (n_components, n_dimensions)</strong> :</p>
+<blockquote class="last">
+<div><p>(for now only diagonal covariance matrices are supported)</p>
+</div></blockquote>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.set_means">
+<tt class="descname">set_means</tt><big>(</big><em>means</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.set_means" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set mean vectors with numpy array.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>means: numpy.ndarray, shape (n_components, n_dimensions)</strong> :</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="ggmm.cpu.GMM.set_weights">
+<tt class="descname">set_weights</tt><big>(</big><em>weights</em><big>)</big><a class="headerlink" href="#ggmm.cpu.GMM.set_weights" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set weight vector with numpy array.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>weights: numpy.ndarray, shape (n_components,)</strong> :</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">CPU/Numpy Backend</a><ul>
+<li><a class="reference internal" href="#documentation">Documentation</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="gpu.html"
+                        title="previous chapter">GPU/CUDAMat Backend</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/cpu.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="np-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="gpu.html" title="GPU/CUDAMat Backend"
+             >previous</a> |</li>
+        <li><a href="index.html">ggmm 0.1a1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Eric Battenberg.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
