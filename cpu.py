@@ -1,6 +1,6 @@
-"""
+'''
 CPU/Numpy backend for GMM training and inference
-"""
+'''
 
 # Author: Eric Battenberg <ebattenberg@gmail.com>
 # Based on gmm.py from sklearn
@@ -23,7 +23,7 @@ def shutdown():
 
 
 def log_multivariate_normal_density(X, means, covars, covariance_type='diag'):
-    """Compute the log probability under a multivariate Gaussian distribution.
+    '''Compute the log probability under a multivariate Gaussian distribution.
 
     Parameters
     ----------
@@ -49,7 +49,7 @@ def log_multivariate_normal_density(X, means, covars, covariance_type='diag'):
     lpr : array_like, shape (n_samples, n_components)
         Array containing the log probabilities of each data point in
         X under each of the n_components multivariate Gaussian distributions.
-    """
+    '''
     log_multivariate_normal_density_dict = {
         'spherical': _log_multivariate_normal_density_spherical,
         'tied': _log_multivariate_normal_density_tied,
@@ -61,11 +61,11 @@ def log_multivariate_normal_density(X, means, covars, covariance_type='diag'):
 
 
 def logsumexp(arr, axis=0):
-    """Computes the sum of arr assuming arr is in the log domain.
+    '''Computes the sum of arr assuming arr is in the log domain.
 
     Returns log(sum(exp(arr))) while minimizing the possibility of
     over/underflow.
-    """
+    '''
     arr = np.rollaxis(arr, axis)
     # Use the max to normalize, as with the log this is what accumulates
     # the less errors
@@ -76,13 +76,13 @@ def logsumexp(arr, axis=0):
 
 
 def check_random_state(seed):
-    """Turn seed into a np.random.RandomState instance
+    '''Turn seed into a np.random.RandomState instance
 
     If seed is None, return the RandomState singleton used by np.random.
     If seed is an int, return a new RandomState instance seeded with seed.
     If seed is already a RandomState instance, return it.
     Otherwise raise ValueError.
-    """
+    '''
     if seed is None or seed is np.random:
         return np.random.mtrand._rand
     if isinstance(seed, (numbers.Integral, np.integer)):
@@ -94,7 +94,7 @@ def check_random_state(seed):
 
 
 def pinvh(a, cond=None, rcond=None, lower=True):
-    """Compute the (Moore-Penrose) pseudo-inverse of a hermetian matrix.
+    '''Compute the (Moore-Penrose) pseudo-inverse of a hermetian matrix.
 
     Calculate a generalized inverse of a symmetric matrix using its
     eigenvalue decomposition and including all 'large' eigenvalues.
@@ -133,7 +133,7 @@ def pinvh(a, cond=None, rcond=None, lower=True):
     >>> np.allclose(B, np.dot(B, np.dot(a, B)))
     True
 
-    """
+    '''
     a = np.asarray_chkfinite(a)
     s, u = linalg.eigh(a, lower=lower)
 
@@ -154,7 +154,7 @@ def pinvh(a, cond=None, rcond=None, lower=True):
 
 def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
                     random_state=None):
-    """Generate random samples from a Gaussian distribution.
+    '''Generate random samples from a Gaussian distribution.
 
     Parameters
     ----------
@@ -178,7 +178,7 @@ def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
     -------
     X : array, shape (n_dimensions, n_samples)
         Randomly generated sample
-    """
+    '''
 
     rng = check_random_state(random_state)
     n_dimensions = len(mean)
@@ -201,7 +201,7 @@ def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
 
 
 class GMM(object):
-    """Gaussian Mixture Model
+    '''Gaussian Mixture Model
 
     Representation of a Gaussian mixture model probability distribution.
     This class allows for easy evaluation of, sampling from, and
@@ -227,7 +227,7 @@ class GMM(object):
     min_covar : float, optional
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
-    """
+    '''
 
     def __init__(self, n_components, n_dimensions,
                  covariance_type='diag',
@@ -334,7 +334,7 @@ class GMM(object):
         return self.covars
 
     def score_samples(self, X):
-        """Return the per-sample likelihood of the data under the model.
+        '''Return the per-sample likelihood of the data under the model.
 
         Compute the log probability of X under the model and
         return the posterior probability of each
@@ -354,7 +354,7 @@ class GMM(object):
         posteriors : array_like, shape (n_samples, n_components)
             Posterior probabilities of each mixture component for each
             sample
-        """
+        '''
         if None in (self.weights, self.means, self.covars):
             raise ValueError('GMM parameters have not been initialized')
 
@@ -373,7 +373,7 @@ class GMM(object):
         return logprob, responsibilities
 
     def score(self, X):
-        """Compute the log probability under the model.
+        '''Compute the log probability under the model.
 
         Parameters
         ----------
@@ -385,12 +385,12 @@ class GMM(object):
         -------
         logprob : array_like, shape (n_samples,)
             Log probabilities of each data point in X
-        """
+        '''
         logprob, _ = self.score_samples(X)
         return logprob
 
     def predict(self, X):
-        """Predict label for data.
+        '''Predict label for data.
 
         Parameters
         ----------
@@ -399,12 +399,12 @@ class GMM(object):
         Returns
         -------
         C : array, shape = (n_samples,)
-        """
+        '''
         _, posteriors = self.score_samples(X)
         return posteriors.argmax(axis=1)
 
     def compute_posteriors(self, X):
-        """Predict posterior probability of data under each Gaussian
+        '''Predict posterior probability of data under each Gaussian
         in the model.
 
         Parameters
@@ -416,12 +416,12 @@ class GMM(object):
         posteriors : array-like, shape = (n_samples, K)
             Returns the probability of the sample for each Gaussian
             (state) in the model.
-        """
+        '''
         _, posteriors = self.score_samples(X)
         return posteriors
 
     def sample(self, n_samples=1, random_state=None):
-        """Generate random samples from the model.
+        '''Generate random samples from the model.
 
         Parameters
         ----------
@@ -432,7 +432,7 @@ class GMM(object):
         -------
         X : array_like, shape (n_samples, n_dimensions)
             List of samples
-        """
+        '''
         if random_state is None:
             random_state = self.random_state
         random_state = check_random_state(random_state)
@@ -464,7 +464,7 @@ class GMM(object):
             thresh=1e-2, n_iter=100, n_init=1,
             update_params='wmc', init_params='',
             random_state=None, verbose=None):
-        """Estimate model parameters with the expectation-maximization
+        '''Estimate model parameters with the expectation-maximization
         algorithm.
 
         A initialization step is performed before entering the em
@@ -499,7 +499,7 @@ class GMM(object):
         random_state: numpy.random.RandomState
         verbose: bool, optional
             Whether to print EM iteration information during training
-        """
+        '''
         if verbose is None:
             verbose = self.verbose
 
@@ -587,8 +587,8 @@ class GMM(object):
         return converged
 
     def _do_mstep(self, X, responsibilities, update_params, min_covar=0):
-        """ Perform the Mstep of the EM algorithm and return the class weihgts.
-        """
+        ''' Perform the Mstep of the EM algorithm and return the class weihgts.
+        '''
         weights = responsibilities.sum(axis=0)
         weighted_X_sum = np.dot(responsibilities.T, X)
         inverse_weights = 1.0 / (weights[:, np.newaxis] + 10 * EPS)
@@ -606,7 +606,7 @@ class GMM(object):
         return weights
 
     def _n_parameters(self):
-        """Return the number of free parameters in the model."""
+        '''Return the number of free parameters in the model.'''
         ndim = self.means.shape[1]
         if self.covariance_type == 'full':
             cov_params = self.n_components * ndim * (ndim + 1) / 2.
@@ -620,7 +620,7 @@ class GMM(object):
         return int(cov_params + mean_params + self.n_components - 1)
 
     def bic(self, X):
-        """Bayesian information criterion for the current model fit
+        '''Bayesian information criterion for the current model fit
         and the proposed data
 
         Parameters
@@ -630,12 +630,12 @@ class GMM(object):
         Returns
         -------
         bic: float (the lower the better)
-        """
+        '''
         return (-2 * self.score(X).sum() +
                 self._n_parameters() * np.log(X.shape[0]))
 
     def aic(self, X):
-        """Akaike information criterion for the current model fit
+        '''Akaike information criterion for the current model fit
         and the proposed data
 
         Parameters
@@ -645,7 +645,7 @@ class GMM(object):
         Returns
         -------
         aic: float (the lower the better)
-        """
+        '''
         return - 2 * self.score(X).sum() + 2 * self._n_parameters()
 
 
@@ -655,7 +655,7 @@ class GMM(object):
 
 
 def _log_multivariate_normal_density_diag(X, means, covars):
-    """Compute Gaussian log-density at X for a diagonal model"""
+    '''Compute Gaussian log-density at X for a diagonal model'''
     n_samples, n_dimensions = X.shape
     lpr = -0.5 * (n_dimensions * np.log(2 * np.pi) + np.sum(np.log(covars), 1)
                   + np.sum((means ** 2) / covars, 1)
@@ -665,7 +665,7 @@ def _log_multivariate_normal_density_diag(X, means, covars):
 
 
 def _log_multivariate_normal_density_spherical(X, means, covars):
-    """Compute Gaussian log-density at X for a spherical model"""
+    '''Compute Gaussian log-density at X for a spherical model'''
     cv = covars.copy()
     if covars.ndim == 1:
         cv = cv[:, np.newaxis]
@@ -675,7 +675,7 @@ def _log_multivariate_normal_density_spherical(X, means, covars):
 
 
 def _log_multivariate_normal_density_tied(X, means, covars):
-    """Compute Gaussian log-density at X for a tied model"""
+    '''Compute Gaussian log-density at X for a tied model'''
 
     n_samples, n_dimensions = X.shape
     icv = pinvh(covars)
@@ -688,8 +688,8 @@ def _log_multivariate_normal_density_tied(X, means, covars):
 
 
 def _log_multivariate_normal_density_full(X, means, covars, min_covar=1.e-7):
-    """Log probability for full covariance matrices.
-    """
+    '''Log probability for full covariance matrices.
+    '''
     n_samples, n_dimensions = X.shape
     nmix = len(means)
     log_prob = np.empty((n_samples, nmix))
@@ -710,8 +710,8 @@ def _log_multivariate_normal_density_full(X, means, covars, min_covar=1.e-7):
 
 
 def _validate_covars(covars, covariance_type, n_components):
-    """Do basic checks on matrix covariance sizes and values
-    """
+    '''Do basic checks on matrix covariance sizes and values
+    '''
     if covariance_type == 'spherical':
         if len(covars) != n_components:
             raise ValueError("'spherical' covars have length n_components")
@@ -750,8 +750,8 @@ def _validate_covars(covars, covariance_type, n_components):
 
 def distribute_covar_matrix_to_match_covariance_type(
         tied_cv, covariance_type, n_components):
-    """Create all the covariance matrices from a given template
-    """
+    '''Create all the covariance matrices from a given template
+    '''
     if covariance_type == 'spherical':
         cv = np.tile(tied_cv.mean() * np.ones(tied_cv.shape[1]),
                      (n_components, 1))
@@ -769,7 +769,7 @@ def distribute_covar_matrix_to_match_covariance_type(
 
 def _covar_mstep_diag(gmm, X, responsibilities, weighted_X_sum, norm,
                       min_covar):
-    """Performing the covariance M step for diagonal cases"""
+    '''Performing the covariance M step for diagonal cases'''
     avg_X2 = np.dot(responsibilities.T, X * X) * norm
     avg_means2 = gmm.means ** 2
     avg_X_means = gmm.means * weighted_X_sum * norm
@@ -777,14 +777,14 @@ def _covar_mstep_diag(gmm, X, responsibilities, weighted_X_sum, norm,
 
 
 def _covar_mstep_spherical(*args):
-    """Performing the covariance M step for spherical cases"""
+    '''Performing the covariance M step for spherical cases'''
     cv = _covar_mstep_diag(*args)
     return np.tile(cv.mean(axis=1)[:, np.newaxis], (1, cv.shape[1]))
 
 
 def _covar_mstep_full(gmm, X, posteriors, weighted_X_sum, norm,
                       min_covar):
-    """Performing the covariance M step for full cases"""
+    '''Performing the covariance M step for full cases'''
     # Eq. 12 from K. Murphy, "Fitting a Conditional Linear Gaussian
     # Distribution"
     n_dimensions = X.shape[1]

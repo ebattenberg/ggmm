@@ -1,6 +1,6 @@
-"""
+'''
 GPU/CUDAMat backend for GMM training and inference
-"""
+'''
 
 # Author: Eric Battenberg <ebattenberg@gmail.com>
 # Based on gmm.py from sklearn
@@ -37,7 +37,7 @@ def shutdown():
 
 def log_multivariate_normal_density(
         X, means, covars, covariance_type='diag', temp_gpu_mem=None):
-    """Compute the log probability under a multivariate Gaussian distribution.
+    '''Compute the log probability under a multivariate Gaussian distribution.
 
     Parameters
     ----------
@@ -63,7 +63,7 @@ def log_multivariate_normal_density(
     lpr : array_like, shape (n_samples, n_components)
         Array containing the log probabilities of each data point in
         X under each of the n_components multivariate Gaussian distributions.
-    """
+    '''
     log_multivariate_normal_density_dict = {
         # 'spherical': _log_multivariate_normal_density_spherical,
         # 'tied': _log_multivariate_normal_density_tied,
@@ -83,13 +83,13 @@ def log_multivariate_normal_density(
 
 
 def check_random_state(seed):
-    """Turn seed into a np.random.RandomState instance
+    '''Turn seed into a np.random.RandomState instance
 
     If seed is None, return the RandomState singleton used by np.random.
     If seed is an int, return a new RandomState instance seeded with seed.
     If seed is already a RandomState instance, return it.
     Otherwise raise ValueError.
-    """
+    '''
     if seed is None or seed is np.random:
         return np.random.mtrand._rand
     if isinstance(seed, (numbers.Integral, np.integer)):
@@ -101,7 +101,7 @@ def check_random_state(seed):
 
 
 def pinvh(a, cond=None, rcond=None, lower=True):
-    """Compute the (Moore-Penrose) pseudo-inverse of a hermetian matrix.
+    '''Compute the (Moore-Penrose) pseudo-inverse of a hermetian matrix.
 
     Calculate a generalized inverse of a symmetric matrix using its
     eigenvalue decomposition and including all 'large' eigenvalues.
@@ -140,7 +140,7 @@ def pinvh(a, cond=None, rcond=None, lower=True):
     >>> np.allclose(B, np.dot(B, np.dot(a, B)))
     True
 
-    """
+    '''
     a = np.asarray_chkfinite(a)
     s, u = linalg.eigh(a, lower=lower)
 
@@ -244,7 +244,7 @@ class TempGPUMem(dict):
 
 
 class GMM(object):
-    """Gaussian Mixture Model
+    '''Gaussian Mixture Model
 
     Representation of a Gaussian mixture model probability distribution.
     This class allows for easy evaluation of, sampling from, and
@@ -270,7 +270,7 @@ class GMM(object):
     min_covar : float, optional
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
-    """
+    '''
 
     def __init__(self, n_components, n_dimensions,
                  covariance_type='diag',
@@ -379,7 +379,7 @@ class GMM(object):
         return self.covars.asarray()
 
     def score_samples(self, X, temp_gpu_mem=None):
-        """Return the per-sample likelihood of the data under the model.
+        '''Return the per-sample likelihood of the data under the model.
 
         Compute the log probability of X under the model and
         return the posterior probability of each
@@ -399,7 +399,7 @@ class GMM(object):
         posteriors : array_like, shape (n_samples, n_components)
             Posterior probability of each mixture component for each
             sample
-        """
+        '''
         if None in (self.weights, self.means, self.covars):
             raise ValueError('GMM parameters have not been initialized')
 
@@ -452,7 +452,7 @@ class GMM(object):
         return logprob_Nx1, posteriors_NxK
 
     def score(self, X):
-        """Compute the log probability under the model.
+        '''Compute the log probability under the model.
 
         Parameters
         ----------
@@ -464,12 +464,12 @@ class GMM(object):
         -------
         logprob_Nx1 : array_like, shape (n_samples,)
             Log probabilities of each data point in X
-        """
+        '''
         logprob_Nx1, _ = self.score_samples(X)
         return logprob_Nx1
 
     def predict(self, X):
-        """Predict label for data.
+        '''Predict label for data.
 
         Parameters
         ----------
@@ -478,12 +478,12 @@ class GMM(object):
         Returns
         -------
         C : array, shape = (n_samples,)
-        """
+        '''
         _, posteriors = self.score_samples(X)
         return posteriors.argmax(axis=1)
 
     def compute_posteriors(self, X):
-        """Predict posterior probability of data under each Gaussian
+        '''Predict posterior probability of data under each Gaussian
         in the model.
 
         Parameters
@@ -495,7 +495,7 @@ class GMM(object):
         posteriors : array-like, shape = (n_samples, n_components)
             Returns the probability of the sample for each Gaussian
             (state) in the model.
-        """
+        '''
         _, posteriors = self.score_samples(X)
         return posteriors
 
@@ -503,7 +503,7 @@ class GMM(object):
             thresh=1e-2, n_iter=100, n_init=1,
             update_params='wmc', init_params='',
             random_state=None, verbose=None):
-        """Estimate model parameters with the expectation-maximization
+        '''Estimate model parameters with the expectation-maximization
         algorithm.
 
         A initialization step is performed before entering the em
@@ -538,7 +538,7 @@ class GMM(object):
         random_state: numpy.random.RandomState
         verbose: bool, optional
             Whether to print EM iteration information during training
-        """
+        '''
         if verbose is None:
             verbose = self.verbose
 
@@ -645,8 +645,8 @@ class GMM(object):
             self, X, posteriors,
             update_params, min_covar=0,
             temp_gpu_mem=None):
-        """ Perform the Mstep of the EM algorithm and return the class weights.
-        """
+        ''' Perform the Mstep of the EM algorithm and return the class weights.
+        '''
 
         N = X.shape[0]
         K, D = self.n_components, self.n_dimensions
@@ -692,7 +692,7 @@ class GMM(object):
         return weights
 
     def _n_parameters(self):
-        """Return the number of free parameters in the model."""
+        '''Return the number of free parameters in the model.'''
         ndim = self.means.shape[1]
         if self.covariance_type == 'full':
             cov_params = self.n_components * ndim * (ndim + 1) / 2.
@@ -712,7 +712,7 @@ class GMM(object):
 
 
 def _log_multivariate_normal_density_diag(X, means, covars, temp_gpu_mem):
-    """Compute Gaussian log-density at X for a diagonal model"""
+    '''Compute Gaussian log-density at X for a diagonal model'''
 
     N, D = X.shape
     K = means.shape[0]
@@ -769,7 +769,7 @@ def _log_multivariate_normal_density_diag(X, means, covars, temp_gpu_mem):
 
 def _covar_mstep_diag(gmm, X, posteriors, weighted_X_sum, inv_weights,
                       min_covar, temp_gpu_mem):
-    """Performing the covariance M step for diagonal cases"""
+    '''Performing the covariance M step for diagonal cases'''
 
     X2 = temp_gpu_mem['temp_NxD']
     X.mult(X, target=X2)  # X2 = X*X
