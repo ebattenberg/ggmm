@@ -8,4 +8,4 @@ Reference
 ===============
 
 .. autoclass:: ggmm.cpu.GMM
-    :members:
+    :members: 

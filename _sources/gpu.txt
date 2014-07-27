@@ -3,7 +3,6 @@ GPU/CUDAMat Backend
 *********************
 
 .. automodule:: ggmm.gpu
-    :members: init, shutdown
 
 Example Usage
 ========================
@@ -40,6 +39,9 @@ Training a GMM::
 
 Reference
 ================
+
+.. autofunction:: ggmm.gpu.init
+.. autofunction:: ggmm.gpu.shutdown
 
 .. autoclass:: ggmm.gpu.GMM
     :members:
