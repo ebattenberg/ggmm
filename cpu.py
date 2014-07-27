@@ -204,7 +204,6 @@ def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
 
 
 class GMM(object):
-
     """Gaussian Mixture Model
 
     Representation of a Gaussian mixture model probability distribution.
@@ -217,63 +216,20 @@ class GMM(object):
 
     Parameters
     ----------
-    n_components : int, optional
-        Number of mixture components. Defaults to 1.
+    n_components : int, required
+        Number of mixture components.
+
+    n_dimensions : int, required
+        Number of data dimensions.
 
     covariance_type : string, optional
         String describing the type of covariance parameters to
-        use.  Must be one of 'spherical', 'tied', 'diag', 'full'.
+        use.  For now, only 'diag' is supported.
         Defaults to 'diag'.
-
-    random_state: RandomState or an int seed (0 by default)
-        A random number generator instance
 
     min_covar : float, optional
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
-
-    thresh : float, optional
-        Convergence threshold.
-
-    n_iter : int, optional
-        Number of EM iterations to perform.
-
-    n_init : int, optional
-        Number of initializations to perform. the best results is kept
-
-    update_params : string, optional
-        Controls which parameters are updated in the training
-        process.  Can contain any combination of 'w' for weights,
-        'm' for means, and 'c' for covars.  Defaults to 'wmc'.
-
-    init_params : string, optional
-        Controls which parameters are updated in the initialization
-        process.  Can contain any combination of 'w' for weights,
-        'm' for means, and 'c' for covars.  Defaults to 'wmc'.
-
-    Attributes
-    ----------
-    `weights` : array, shape (`n_components`,)
-        This attribute stores the mixing weights for each mixture component.
-
-    `means` : array, shape (`n_components`, `n_features`)
-        Mean parameters for each mixture component.
-
-    `covars_` : array
-        Covariance parameters for each mixture component.  The shape
-        depends on `covariance_type`::
-
-            (n_components, n_features)             if 'spherical',
-            (n_features, n_features)               if 'tied',
-            (n_components, n_features)             if 'diag',
-            (n_components, n_features, n_features) if 'full'
-
-    Output: returns bool converged
-
-
-
-
-
     """
 
     def __init__(self, n_components, n_dimensions,
@@ -296,6 +252,13 @@ class GMM(object):
         self.covars = None
 
     def set_weights(self, weights):
+        '''
+        Set weight vector with numpy array.
+
+        Parameters
+        ----------
+        weights: numpy.ndarray, shape (n_components,)
+        '''
         if weights.shape != (self.n_components,):
             raise ValueError(
                 'input weight vector is of shape %s, should be %s'
@@ -307,6 +270,13 @@ class GMM(object):
         self.weights = weights.copy()
 
     def set_means(self, means):
+        '''
+        Set mean vectors with numpy array.
+
+        Parameters
+        ----------
+        means: numpy.ndarray, shape (n_components, n_dimensions)
+        '''
         if means.shape != (self.n_components, self.n_dimensions):
             raise ValueError(
                 'input mean matrix is of shape %s, should be %s'
@@ -314,6 +284,14 @@ class GMM(object):
         self.means = means.copy()
 
     def set_covars(self, covars):
+        '''
+        Set covariance matrices with numpy array
+
+        Parameters
+        ----------
+        covars: numpy.ndarray, shape (n_components, n_dimensions)
+            (for now only diagonal covariance matrices are supported)
+        '''
         if covars.shape != (self.n_components, self.n_dimensions):
             raise ValueError(
                 'input covars matrix is of shape %s, should be %s'
@@ -328,12 +306,34 @@ class GMM(object):
                     'have been set to %g' % (self.min_covar, self.min_covar)
 
     def get_weights(self):
+        '''
+        Return current weight vector as numpy array
+
+        Returns
+        -------
+        weights : np.ndarray, shape (n_components,)
+        '''
         return self.weights
 
     def get_means(self):
+        '''
+        Return current means as numpy array
+
+        Returns
+        -------
+        means : np.ndarray, shape (n_components, n_dimensions)
+        '''
         return self.means
 
     def get_covars(self):
+        '''
+        Return current means as numpy array
+
+        Returns
+        -------
+        covars : np.ndarray, shape (n_components, n_dimensions)
+            (for now only diagonal covariance matrices are supported)
+        '''
         return self.covars
 
     def score_samples(self, X):
@@ -345,8 +345,8 @@ class GMM(object):
 
         Parameters
         ----------
-        X: array_like, shape (n_samples, n_features)
-            List of n_features-dimensional data points. Each row
+        X: numpy.ndarray, shape (n_samples, n_dimensions)
+            Array of n_samples data points. Each row
             corresponds to a single data point.
 
         Returns
@@ -356,7 +356,7 @@ class GMM(object):
 
         responsibilities : array_like, shape (n_samples, n_components)
             Posterior probabilities of each mixture component for each
-            observation
+            sample
         """
         if None in (self.weights, self.means, self.covars):
             raise ValueError('GMM parameters have not been initialized')
@@ -406,7 +406,7 @@ class GMM(object):
         logprob, responsibilities = self.score_samples(X)
         return responsibilities.argmax(axis=1)
 
-    def predict_proba(self, X):
+    def compute_posteriors(self, X):
         """Predict posterior probability of data under each Gaussian
         in the model.
 
@@ -481,6 +481,27 @@ class GMM(object):
         X : array_like, shape (n, n_features)
             List of n_features-dimensional data points.  Each row
             corresponds to a single data point.
+        thresh : float, optional
+            Convergence threshold.
+
+        n_iter : int, optional
+            Number of EM iterations to perform.
+
+        n_init : int, optional
+            Number of initializations to perform. the best results is kept
+
+        update_params : string, optional
+            Controls which parameters are updated in the training
+            process.  Can contain any combination of 'w' for weights,
+            'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+
+        init_params : string, optional
+            Controls which parameters are updated in the initialization
+            process.  Can contain any combination of 'w' for weights,
+            'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+        random_state: numpy.random.RandomState
+        verbose: bool, optional
+            Whether to print EM iteration information during training
         """
         if verbose is None:
             verbose = self.verbose

@@ -285,7 +285,6 @@ def sample_gaussian(mean, covar, covariance_type='diag', n_samples=1,
 
 
 class GMM(object):
-
     """Gaussian Mixture Model
 
     Representation of a Gaussian mixture model probability distribution.
