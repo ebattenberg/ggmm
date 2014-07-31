@@ -40,12 +40,12 @@ Compile CUDAMat:
 cd ${INSTALL_PATH}/cudamat
 make
 ```
-Run CUDAMat tests (requires nose):
+Run CUDAMat tests (optional, requires nose):
 ```
 cd ${INSTALL_PATH}/cudamat
 nosetests
 ```
-Run ggmm tests (requires nose):
+Run ggmm tests (optional, requires nose):
 ```bash
 cd ${INSTALL_PATH}/ggmm
 nosetests
