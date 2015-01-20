@@ -7,7 +7,7 @@ import ggmm.cpu as cgmm
 # covariance types
 # ------------------------------------------
 INVALID_COVAR_TYPES = ['full','tied','spherical','woah!']
-        
+
 def test_invalid_covar_type():
     for covar_type in INVALID_COVAR_TYPES:
         yield check_invalid_covar_type, covar_type
@@ -52,11 +52,11 @@ def test_set_weights():
 # set_means
 # ------------------------------------------
 
-WEIGHT_INPUT = [ 
-        #(K,D), weight_dim, expected_error
-        ((5,10), 5, None),
-        ((5,10), 4, ValueError),
-        ((5,10), 6, ValueError),
+WEIGHT_INPUT = [
+    #(K,D), weight_dim, expected_error
+    ((5,10), 5, None),
+    ((5,10), 4, ValueError),
+    ((5,10), 6, ValueError),
 ]
 
 def test_set_means_wrong_dim1():
@@ -133,7 +133,7 @@ def test_fit():
     gmm.fit(samples,n_init=3,random_state=random_state)
 
     # match learned components to true components
-    if (np.sum(np.abs(true_means - gmm.get_means())) 
+    if (np.sum(np.abs(true_means - gmm.get_means()))
             > np.sum(np.abs(true_means - gmm.get_means()[::-1]))):
         true_means = true_means[::-1]
         true_covars = true_covars[::-1]
@@ -143,7 +143,7 @@ def test_fit():
 
 
 
-        
+
 
 
 
