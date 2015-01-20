@@ -14,31 +14,22 @@ Python module to train GMMs using CUDA (via CUDAMat)
 * Not Windows (only tested on Linux and Mac)
 * CUDA 6.0+ (only tested with 6.0)
 * numpy
-* my fork of CUDAMat avaiable here: https://github.com/ebattenberg/cudamat
+* CUDAMat, avaiable here: https://github.com/cudamat/cudamat.git
 * nose (optional, for running tests)
 
 ###Installation
 
-Clone ggmm and CUDAMat fork in local install path:
+Clone ggmm and CUDAMat in local install path:
 ```bash
 cd ${INSTALL_PATH}
 git clone https://github.com/ebattenberg/ggmm.git
-git clone https://github.com/ebattenberg/cudamat.git
+git clone https://github.com/cudamat/cudamat.git
 ```
-Update paths (add these to .bashrc if desired):
-```bash
-CUDA_BIN=/usr/local/cuda/bin # your CUDA binary path may be different
-CUDA_LIB=/usr/local/cuda/lib64 # your CUDA library path may be different
-export PATH=${CUDA_BIN}:$PATH
-export LD_LIBRARY_PATH=${CUDA_LIB}:$LD_LIBRARY_PATH
 
-# Add ggmm and CUDAMat to PYTHONPATH
-export PYTHONPATH=${PYTHONPATH}:${INSTALL_PATH}
-```
-Compile CUDAMat:
+Compile and install CUDAMat:
 ```bash
 cd ${INSTALL_PATH}/cudamat
-make
+sudo python setup.py install
 ```
 Run CUDAMat tests (optional, requires nose):
 ```
