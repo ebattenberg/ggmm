@@ -231,7 +231,7 @@ class TempGPUMem(dict):
                              shape,
                              key)
                 self[key] = cm.empty(shape)
-            elif self[key] != shape:
+            elif self[key].shape != shape:
                 logger.debug('%s: reshaped %s from %s to %s',
                              sys._getframe().f_code.co_name,
                              key,
