@@ -9,7 +9,7 @@ Python module to train GMMs using CUDA (via CUDAMat)
 [Example usage](#example-usage)  
 [Documentation](#documentation)  
 
-###Dependencies
+### Dependencies
 
 * Not Windows (only tested on Linux and Mac)
 * CUDA 6.0+ (only tested with 6.0)
@@ -17,7 +17,7 @@ Python module to train GMMs using CUDA (via CUDAMat)
 * CUDAMat, avaiable here: https://github.com/cudamat/cudamat.git
 * nose (optional, for running tests)
 
-###Installation
+### Installation
 
 Clone ggmm and CUDAMat in local install path:
 ```bash
@@ -42,7 +42,7 @@ cd ${INSTALL_PATH}/ggmm
 nosetests
 ```
 
-###Example Usage
+### Example Usage
 
 ```python
 import ggmm.gpu as ggmm
@@ -52,7 +52,7 @@ X = some_module.load_training_data()
 # N - training examples
 # D - data dimension
 # K - number of GMM components
-N, D = X.shape 
+N, D = X.shape
 K = 128
 
 ggmm.init()
