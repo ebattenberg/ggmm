@@ -400,7 +400,7 @@ class GMM(object):
             Posterior probability of each mixture component for each
             sample
         '''
-        if None in (self.weights, self.means, self.covars):
+        if self.weights is None or self.means is None or self.covars is None:
             raise ValueError('GMM parameters have not been initialized')
 
         if X.shape[1] != self.n_dimensions:
