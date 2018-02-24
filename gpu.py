@@ -561,7 +561,7 @@ class GMM(object):
         if X.shape[0] < self.n_components:
             raise ValueError(
                 'GMM estimation with %s components, but got only %s samples' %
-                (self.K, X.shape[0]))
+                (self.n_components, X.shape[0]))
 
         # allocate TempGPUMem
         temp_gpu_mem = TempGPUMem()
