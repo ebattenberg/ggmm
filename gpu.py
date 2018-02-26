@@ -270,6 +270,9 @@ class GMM(object):
     min_covar : float, optional
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
+
+    verbose : bool, optional
+        Whether to print EM iteration information during training
     '''
 
     def __init__(self, n_components, n_dimensions,
@@ -534,7 +537,7 @@ class GMM(object):
         init_params : string, optional
             Controls which parameters are updated in the initialization
             process.  Can contain any combination of 'w' for weights,
-            'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+            'm' for means, and 'c' for covars.  Defaults to ''.
         random_state: numpy.random.RandomState
         verbose: bool, optional
             Whether to print EM iteration information during training
