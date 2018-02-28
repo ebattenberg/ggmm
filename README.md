@@ -32,7 +32,7 @@ cd ${INSTALL_PATH}/cudamat
 sudo python setup.py install
 ```
 Run CUDAMat tests (optional, requires nose):
-```
+```bash
 cd ${INSTALL_PATH}/cudamat
 nosetests
 ```
@@ -40,6 +40,11 @@ Run ggmm tests (optional, requires nose):
 ```bash
 cd ${INSTALL_PATH}/ggmm
 nosetests
+```
+Install ggmm:
+```bash
+cd ${INSTALL_PATH}/ggmm
+sudo pip install .
 ```
 
 ### Example Usage
