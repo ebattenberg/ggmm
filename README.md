@@ -15,6 +15,7 @@ Python module to train GMMs using CUDA (via CUDAMat)
 * CUDA 6.0+ (only tested with 6.0)
 * numpy
 * CUDAMat, avaiable here: https://github.com/cudamat/cudamat.git
+* future: http://python-future.org/index.html
 * nose (optional, for running tests)
 
 ### Installation

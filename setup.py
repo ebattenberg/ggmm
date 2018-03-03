@@ -19,10 +19,10 @@ setup(
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 3',
         'Topic :: Scientific/Engineering'
     ],
     keywords='GMM CUDA',
     packages=find_packages(exclude=['tests']),
-    install_requires=['CUDAMat'],
-    python_requires='==2.*'
+    install_requires=['CUDAMat', 'future']
 )

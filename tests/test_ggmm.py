@@ -1,3 +1,7 @@
+# python2 compatibility
+from __future__ import print_function
+from builtins import range
+
 import logging
 import time
 import os
@@ -242,7 +246,7 @@ def check_time_score_samples(N,K,D):
     X_gpu = ggmm.return_CUDAMatrix(X)
     gpu_trials = 0
     t0 = time.time()
-    for i in xrange(MAX_TRIALS):
+    for i in range(MAX_TRIALS):
         logprob_gpu, posterior_gpu = gmm_gpu.score_samples(X_gpu,temp_gpu_mem)
         gpu_time = time.time() - t0
         gpu_trials += 1
@@ -252,7 +256,7 @@ def check_time_score_samples(N,K,D):
 
     t0 = time.time()
     cpu_trials = 0
-    for i in xrange(MAX_TRIALS):
+    for i in range(MAX_TRIALS):
         logprob_cpu, posterior_cpu = gmm_cpu.score_samples(X)
         cpu_time = time.time() - t0
         cpu_trials += 1
@@ -262,14 +266,14 @@ def check_time_score_samples(N,K,D):
 
     speedup = avg_cpu_time/avg_gpu_time
 
-    print ''
-    print '------------------------------------'
-    print 'N=%u, K=%u, D=%u' % (N,K,D)
-    print 'avg_cpu_time (%u trials):' % cpu_trials, avg_cpu_time
-    print 'avg_gpu_time (%u trials):' % gpu_trials, avg_gpu_time
-    print 'speedup:', speedup
-    print '------------------------------------'
-    print ''
+    print('')
+    print('------------------------------------')
+    print('N=%u, K=%u, D=%u' % (N,K,D))
+    print('avg_cpu_time (%u trials):' % cpu_trials, avg_cpu_time)
+    print('avg_gpu_time (%u trials):' % gpu_trials, avg_gpu_time)
+    print('speedup:', speedup)
+    print('------------------------------------')
+    print('')
     assert_greater(speedup, 1.0)
 
 # ------------------------------------------
@@ -353,7 +357,7 @@ def check_time_do_mstep(N,K,D):
 
     gpu_trials = 0
     t0 = time.time()
-    for i in xrange(MAX_TRIALS):
+    for i in range(MAX_TRIALS):
         gmm_gpu._do_mstep(X_gpu,posterior_gpu, update_params, min_covar)
         gpu_time = time.time() - t0
         gpu_trials += 1
@@ -363,7 +367,7 @@ def check_time_do_mstep(N,K,D):
 
     t0 = time.time()
     cpu_trials = 0
-    for i in xrange(MAX_TRIALS):
+    for i in range(MAX_TRIALS):
         gmm_cpu._do_mstep(X,posterior_cpu, update_params, min_covar)
         cpu_time = time.time() - t0
         cpu_trials += 1
@@ -373,14 +377,14 @@ def check_time_do_mstep(N,K,D):
 
     speedup = avg_cpu_time/avg_gpu_time
 
-    print ''
-    print '------------------------------------'
-    print 'N=%u, K=%u, D=%u' % (N,K,D)
-    print 'avg_cpu_time (%u trials):' % cpu_trials, avg_cpu_time
-    print 'avg_gpu_time (%u trials):' % gpu_trials, avg_gpu_time
-    print 'speedup:', speedup
-    print '------------------------------------'
-    print ''
+    print('')
+    print('------------------------------------')
+    print('N=%u, K=%u, D=%u' % (N,K,D))
+    print('avg_cpu_time (%u trials):' % cpu_trials, avg_cpu_time)
+    print('avg_gpu_time (%u trials):' % gpu_trials, avg_gpu_time)
+    print('speedup:', speedup)
+    print('------------------------------------')
+    print('')
     assert_greater(speedup, 1.0)
 
 # ------------------------------------------
@@ -452,7 +456,7 @@ def check_time_fit(N,K,D):
 
     gpu_trials = 0
     t0 = time.time()
-    for i in xrange(MAX_TRIALS):
+    for i in range(MAX_TRIALS):
         gmm_gpu.fit(X, thresh, n_iter, init_params=init_params)
         gpu_time = time.time() - t0
         gpu_trials += 1
@@ -462,7 +466,7 @@ def check_time_fit(N,K,D):
 
     t0 = time.time()
     cpu_trials = 0
-    for i in xrange(MAX_TRIALS):
+    for i in range(MAX_TRIALS):
         gmm_cpu.fit(X, thresh, n_iter, init_params=init_params)
         cpu_time = time.time() - t0
         cpu_trials += 1
@@ -472,14 +476,14 @@ def check_time_fit(N,K,D):
 
     speedup = avg_cpu_time/avg_gpu_time
 
-    print ''
-    print '------------------------------------'
-    print 'N=%u, K=%u, D=%u' % (N,K,D)
-    print 'avg_cpu_time (%u trials):' % cpu_trials, avg_cpu_time
-    print 'avg_gpu_time (%u trials):' % gpu_trials, avg_gpu_time
-    print 'speedup:', speedup
-    print '------------------------------------'
-    print ''
+    print('')
+    print('------------------------------------')
+    print('N=%u, K=%u, D=%u' % (N,K,D))
+    print('avg_cpu_time (%u trials):' % cpu_trials, avg_cpu_time)
+    print('avg_gpu_time (%u trials):' % gpu_trials, avg_gpu_time)
+    print('speedup:', speedup)
+    print('------------------------------------')
+    print('')
     assert_greater(speedup, 1.0)
 
 def test_correct_fit():
