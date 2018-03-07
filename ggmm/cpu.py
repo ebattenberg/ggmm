@@ -5,6 +5,10 @@ CPU/Numpy backend for GMM training and inference
 # Author: Eric Battenberg <ebattenberg@gmail.com>
 # Based on gmm.py from sklearn
 
+# python2 compatibility
+from __future__ import print_function
+from builtins import range
+
 import numbers
 import numpy as np
 from scipy import linalg
@@ -302,8 +306,8 @@ class GMM(object):
         if np.any(self.covars < self.min_covar):
             self.covars[self.covars < self.min_covar] = self.min_covar
             if self.verbose:
-                print 'input covars less than min_covar (%g) ' \
-                    'have been set to %g' % (self.min_covar, self.min_covar)
+                print('input covars less than min_covar (%g) ' \
+                    'have been set to %g' % (self.min_covar, self.min_covar))
 
     def get_weights(self):
         '''
@@ -446,7 +450,7 @@ class GMM(object):
         # decide which component to use for each sample
         comps = weight_cdf.searchsorted(rand)
         # for each component, generate all needed samples
-        for comp in xrange(self.n_components):
+        for comp in range(self.n_components):
             # occurrences of current component in X
             comp_in_X = (comp == comps)
             # number of those occurrences
@@ -528,7 +532,7 @@ class GMM(object):
 
         max_log_prob = -np.infty
 
-        for _ in xrange(n_init):
+        for _ in range(n_init):
             if 'm' in init_params or self.means is None:
                 perm = random_state.permutation(n_samples)
                 self.means = X[perm[:self.n_components]].copy()
@@ -548,14 +552,14 @@ class GMM(object):
             # EM algorithms
             log_likelihood = []
             converged = False
-            for i in xrange(n_iter):
+            for i in range(n_iter):
                 # Expectation step
                 curr_log_likelihood, responsibilities = self.score_samples(X)
                 curr_log_likelihood_sum = curr_log_likelihood.sum()
                 log_likelihood.append(curr_log_likelihood_sum)
                 if verbose:
-                    print 'Iter: %u, log-likelihood: %f' % (
-                        i, curr_log_likelihood_sum)
+                    print('Iter: %u, log-likelihood: %f' % (
+                        i, curr_log_likelihood_sum))
 
                 # Check for convergence.
                 if i > 0 and abs(log_likelihood[-1] - log_likelihood[-2]) < \
@@ -792,7 +796,7 @@ def _covar_mstep_full(gmm, X, posteriors, weighted_X_sum, norm,
     # Distribution"
     n_dimensions = X.shape[1]
     cv = np.empty((gmm.n_components, n_dimensions, n_dimensions))
-    for c in xrange(gmm.n_components):
+    for c in range(gmm.n_components):
         post = posteriors[:, c]
         # Underflow Errors in doing post * X.T are  not important
         np.seterr(under='ignore')
